@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es-PR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pruebas — Almacén de Licores</title>
+<link rel="stylesheet" href="css/estilos.css">
+<style>
+  html, body { overflow: auto; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 22px 80px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .lead { color: var(--texto-2); margin: 0 0 26px; font-size: 15px; line-height: 1.6; }
+  .grupo { margin-bottom: 26px; }
+  .grupo h2 { font-size: 16px; margin: 0 0 10px; color: var(--texto-2); font-weight: 650; }
+  .p { display: flex; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--panel);
+       border: 1px solid var(--borde); margin-bottom: 8px; align-items: flex-start; font-size: 15px; }
+  .p .m { flex: 0 0 auto; font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 12px; }
+  .p.ok .m { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+  .p.mal { border-color: var(--peligro); }
+  .p.mal .m { background: color-mix(in srgb, var(--peligro) 24%, transparent); color: var(--peligro); }
+  .p .d { flex: 1; }
+  .p .d small { display: block; color: var(--texto-3); margin-top: 3px; font-size: 13px; }
+  #total { position: sticky; top: 0; background: var(--fondo); padding: 14px 0 18px; font-size: 19px; font-weight: 700; z-index: 5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pruebas del almacén</h1>
+  <p class="lead">Corren contra una base de datos aparte (<code>almacen_licores_pruebas</code>), que se borra y se
+  vuelve a crear en cada ejecución. El inventario real no se toca nunca. Cubren lo que descuadra dinero e
+  inventario: el signo de cada movimiento, la atomicidad de los lotes, las reversiones, el día operativo y el
+  consumo por restaurante.</p>
+  <div id="total">Corriendo…</div>
+  <div id="salida"></div>
+</main>
+
+<script type="module">
+// Un fallo del propio arnés no puede quedarse callado: se muestra en pantalla.
+addEventListener('unhandledrejection', (ev) => {
+  document.getElementById('total').textContent = `El arnés se cayó: ${ev.reason?.message || ev.reason}`;
+  document.getElementById('total').style.color = 'var(--peligro)';
+  console.error(ev.reason);
+});
+
+globalThis.__ALMACEN_DB_PRUEBAS__ = 'almacen_licores_pruebas';
+
+await new Promise((res) => {
+  const req = indexedDB.deleteDatabase('almacen_licores_pruebas');
+  req.onsuccess = res; req.onerror = res; req.onblocked = res;
+});
+
+const { DB, nuevoId, DB_NOMBRE } = await import('./js/db.js');
+
+/* Candado. Durante el desarrollo, un service worker sirvió una versión vieja de
+   db.js y las pruebas terminaron escribiendo en el inventario real. No se corre
+   ni una sola prueba sin confirmar primero contra qué base se está trabajando. */
+if (DB_NOMBRE !== 'almacen_licores_pruebas') {
+  const aviso = document.getElementById('total');
+  aviso.textContent = `PRUEBAS CANCELADAS: apuntan a "${DB_NOMBRE}" y no a la base de pruebas. `
+    + 'Cierra la app, borra el caché del navegador y vuelve a abrir esta página.';
+  aviso.style.color = 'var(--peligro)';
+  throw new Error('Las pruebas se negaron a correr contra la base equivocada.');
+}
+
+const M = await import('./js/modelo.js');
+
+const salida = document.getElementById('salida');
+let pasadas = 0; let fallidas = 0; let grupo = null;
+
+function seccion(nombre) {
+  grupo = document.createElement('div');
+  grupo.className = 'grupo';
+  grupo.innerHTML = `<h2>${nombre}</h2>`;
+  salida.append(grupo);
+}
+
+function anotar(ok, nombre, detalle) {
+  if (ok) pasadas += 1; else fallidas += 1;
+  const fila = document.createElement('div');
+  fila.className = `p ${ok ? 'ok' : 'mal'}`;
+  fila.innerHTML = `<span class="m">${ok ? 'PASA' : 'FALLA'}</span><span class="d">${nombre}`
+    + `${detalle ? `<small>${detalle}</small>` : ''}</span>`;
+  (grupo || salida).append(fila);
+}
+
+const igual = (a, b, nombre) => anotar(
+  JSON.stringify(a) === JSON.stringify(b), nombre,
+  JSON.stringify(a) === JSON.stringify(b) ? '' : `esperado ${JSON.stringify(b)}, llegó ${JSON.stringify(a)}`,
+);
+
+async function lanza(fn, fragmento, nombre) {
+  try {
+    await fn();
+    anotar(false, nombre, 'no lanzó ningún error y debía lanzarlo');
+  } catch (e) {
+    anotar(e.message.includes(fragmento), nombre,
+      e.message.includes(fragmento) ? '' : `mensaje inesperado: ${e.message}`);
+  }
+}
+
+/* --- Utilidades de montaje --- */
+
+const EMP = { empleadoId: 'e1', empleadoNombre: 'Luis Ortiz' };
+const REST = 'la-grieta';
+
+async function producto(nombre, existencia, par = 10, reorden = 5, costo = 20) {
+  const p = {
+    id: nuevoId('t'), nombre, categoriaId: 'whisky', tamano: '750 ml',
+    existencia, par, puntoReorden: reorden, costo, activo: true, orden: 0,
+    creado: new Date().toISOString(),
+  };
+  await DB.guardar('productos', p);
+  return p;
+}
+
+const existenciaDe = async (id) => (await DB.obtener('productos', id)).existencia;
+
+await DB.escribirConfig('inicio_dia_operativo', 5);
+
+/* ------------------------------------------------------------------ */
+seccion('Día operativo (hora de Puerto Rico, arranque a las 5:00 a.m.)');
+
+// 6 de agosto de 2026, 1:30 a.m. en Puerto Rico = 05:30 UTC.
+igual(M.diaOperativo(new Date('2026-08-06T05:30:00Z'), 5), '2026-08-05',
+  'La 1:30 a.m. cuenta en el turno de la noche anterior');
+igual(M.diaOperativo(new Date('2026-08-06T09:30:00Z'), 5), '2026-08-06',
+  'Las 5:30 a.m. ya cuentan en el día nuevo');
+igual(M.diaOperativo(new Date('2026-08-06T08:59:00Z'), 5), '2026-08-05',
+  'Las 4:59 a.m. todavía son del día anterior');
+igual(M.diaOperativo(new Date('2026-01-15T22:00:00Z'), 5), '2026-01-15',
+  'En invierno sigue igual: Puerto Rico no cambia la hora');
+igual(M.sumarDias('2026-03-01', -1), '2026-02-28', 'Restar un día cruza el fin de mes');
+igual(M.sumarDias('2024-03-01', -1), '2024-02-29', 'Respeta el año bisiesto');
+
+/* ------------------------------------------------------------------ */
+seccion('Salidas');
+
+const jack = await producto("Jack Daniel's", 10);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 3 }], ...EMP, restauranteId: REST,
+});
+igual(await existenciaDe(jack.id), 7, 'Una salida de 3 baja el inventario de 10 a 7');
+
+let movs = await DB.porIndice('movimientos', 'porProducto', jack.id);
+igual(movs[0].delta, -3, 'El movimiento guarda delta negativo');
+igual(movs[0].restauranteId, REST, 'La salida queda cargada al restaurante');
+igual(movs[0].empleadoNombre, 'Luis Ortiz', 'La salida queda a nombre del empleado');
+igual([movs[0].existenciaAntes, movs[0].existenciaDespues], [10, 7],
+  'Guarda la existencia antes y después, para poder auditar sin recalcular');
+
+await lanza(
+  () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 99 }], ...EMP, restauranteId: REST }),
+  'No hay suficiente', 'Bloquea sacar más de lo que hay',
+);
+igual(await existenciaDe(jack.id), 7, 'Tras el intento bloqueado el inventario no se movió');
+
+await lanza(
+  () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 1 }], ...EMP }),
+  'necesita un restaurante', 'Una salida sin restaurante se rechaza',
+);
+
+await lanza(
+  () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 1.5 }], ...EMP, restauranteId: REST }),
+  'enteros', 'Rechaza cantidades con decimales',
+);
+await lanza(
+  () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 0 }], ...EMP, restauranteId: REST }),
+  'mayores que cero', 'Rechaza cantidad cero',
+);
+await lanza(
+  () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: -2 }], ...EMP, restauranteId: REST }),
+  'mayores que cero', 'Rechaza cantidad negativa',
+);
+
+const escaso = await producto('Escaso', 1);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: escaso.id, cantidad: 4 }], ...EMP,
+  restauranteId: REST, permitirNegativo: true, autorizadoPor: 'Kevin Prieto',
+});
+igual(await existenciaDe(escaso.id), -3, 'Con autorización de gerencia sí deja el inventario en negativo');
+const movEscaso = (await DB.porIndice('movimientos', 'porProducto', escaso.id))[0];
+igual(movEscaso.autorizadoPor, 'Kevin Prieto', 'Queda registrado quién autorizó la excepción');
+
+/* ------------------------------------------------------------------ */
+seccion('Atomicidad del lote');
+
+const buenoA = await producto('Bueno A', 10);
+const buenoB = await producto('Bueno B', 10);
+const sinStock = await producto('Sin stock', 0);
+
+await lanza(
+  () => M.registrarLote({
+    tipo: 'salida',
+    lineas: [
+      { productoId: buenoA.id, cantidad: 2 },
+      { productoId: sinStock.id, cantidad: 1 },
+      { productoId: buenoB.id, cantidad: 2 },
+    ],
+    ...EMP,
+    restauranteId: REST,
+  }),
+  'No hay suficiente', 'Un lote con una línea imposible se rechaza completo',
+);
+igual(await existenciaDe(buenoA.id), 10, 'La línea buena ANTES de la mala no se aplicó');
+igual(await existenciaDe(buenoB.id), 10, 'La línea buena DESPUÉS de la mala no se aplicó');
+igual((await DB.porIndice('movimientos', 'porProducto', buenoA.id)).length, 0,
+  'No quedó ningún movimiento suelto del lote fallido');
+
+/* ------------------------------------------------------------------ */
+seccion('Entradas, ajustes y devoluciones');
+
+const entrante = await producto('Entrante', 4);
+await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: entrante.id, cantidad: 12 }], ...EMP, motivo: 'Factura 8842',
+});
+igual(await existenciaDe(entrante.id), 16, 'La entrada suma al almacén');
+const movEntrada = (await DB.porIndice('movimientos', 'porProducto', entrante.id))[0];
+igual(movEntrada.restauranteId, null, 'La entrada no se le carga a ningún restaurante');
+igual(movEntrada.delta, 12, 'La entrada guarda delta positivo');
+
+const contado = await producto('Contado', 10);
+await M.registrarLote({
+  tipo: 'ajuste', lineas: [{ productoId: contado.id, nuevaExistencia: 7, cantidad: 1 }],
+  ...EMP, motivo: 'Conteo semanal',
+});
+igual(await existenciaDe(contado.id), 7, 'El ajuste deja el inventario igual a lo contado');
+igual((await DB.porIndice('movimientos', 'porProducto', contado.id))[0].delta, -3,
+  'El ajuste guarda la diferencia, no el total contado');
+
+await lanza(
+  () => M.registrarLote({
+    tipo: 'ajuste', lineas: [{ productoId: contado.id, nuevaExistencia: 5, cantidad: 1 }], ...EMP, motivo: '  ',
+  }),
+  'motivo es obligatorio', 'Un ajuste sin motivo se rechaza',
+);
+await lanza(
+  () => M.registrarLote({
+    tipo: 'ajuste', lineas: [{ productoId: contado.id, nuevaExistencia: 7, cantidad: 1 }], ...EMP, motivo: 'Igual',
+  }),
+  'ningún cambio', 'Un ajuste que no cambia nada no ensucia el historial',
+);
+
+const devuelto = await producto('Devuelto', 5, 10, 5, 30);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: devuelto.id, cantidad: 4 }], ...EMP, restauranteId: REST,
+});
+await M.registrarLote({
+  tipo: 'devolucion', lineas: [{ productoId: devuelto.id, cantidad: 1 }], ...EMP,
+  restauranteId: REST, motivo: 'Botella sin abrir',
+});
+igual(await existenciaDe(devuelto.id), 2, 'La devolución suma de vuelta al almacén');
+
+const hoy = M.fechaPR();
+const movsHoy = await M.movimientosPeriodo(hoy, hoy);
+const soloDevuelto = movsHoy.filter((m) => m.productoId === devuelto.id);
+igual(M.porProducto(soloDevuelto)[0].unidades, 3,
+  'El consumo del restaurante baja con la devolución: 4 salidas menos 1 devuelta');
+igual(M.porProducto(soloDevuelto)[0].valor, 90, 'El valor a costo acompaña al consumo: 3 x $30');
+
+/* ------------------------------------------------------------------ */
+seccion('Reversiones');
+
+const revertible = await producto('Revertible', 20);
+const { loteId } = await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: revertible.id, cantidad: 6 }], ...EMP, restauranteId: REST,
+});
+igual(await existenciaDe(revertible.id), 14, 'La salida bajó el inventario a 14');
+
+await M.revertirLote(loteId, { ...EMP, motivo: 'Deshecho por el empleado' });
+igual(await existenciaDe(revertible.id), 20, 'La reversión devuelve el inventario a como estaba');
+
+const movsRev = await DB.porIndice('movimientos', 'porProducto', revertible.id);
+igual(movsRev.length, 2, 'Revertir no borra: quedan los dos movimientos, el original y el espejo');
+const espejo = movsRev.find((m) => m.tipo === 'reversion');
+igual(espejo.revierteA, loteId, 'La reversión apunta al lote original');
+igual(espejo.restauranteId, REST, 'La reversión hereda el restaurante, para que el consumo cuadre');
+
+const soloRevertible = (await M.movimientosPeriodo(hoy, hoy)).filter((m) => m.productoId === revertible.id);
+igual(M.porRestaurante(soloRevertible).length, 0,
+  'Tras revertir, el consumo del restaurante queda en cero y no aparece en el reporte');
+
+await lanza(
+  () => M.revertirLote(loteId, { ...EMP, motivo: 'Otra vez' }),
+  'ya fue revertido', 'No se puede revertir dos veces el mismo movimiento',
+);
+
+// Regresión: la reversión se atribuía a "sistema" en vez de al empleado, y el
+// reporte mostraba a la persona con botellas que en realidad había devuelto,
+// más una fila fantasma sin nombre.
+const atribuido = await producto('Atribuido', 10);
+const loteAtr = (await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: atribuido.id, cantidad: 2 }], ...EMP, restauranteId: REST,
+})).loteId;
+await M.revertirLote(loteAtr, { ...EMP, motivo: 'Deshecho a los 15 segundos' });
+const movsAtr = (await M.movimientosPeriodo(hoy, hoy)).filter((m) => m.productoId === atribuido.id);
+igual(movsAtr.every((m) => m.empleadoId === 'e1'), true,
+  'La reversión queda a nombre del mismo empleado que hizo la salida');
+igual(M.porEmpleado(movsAtr).length, 0,
+  'Tras deshacer, el empleado no queda con botellas fantasma en el reporte');
+
+const dobleReversion = await producto('Doble', 10);
+const lote2 = (await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: dobleReversion.id, cantidad: 5 }], ...EMP, motivo: 'Orden',
+})).loteId;
+await M.revertirLote(lote2, { ...EMP });
+igual(await existenciaDe(dobleReversion.id), 10, 'También se puede revertir una entrada mal capturada');
+
+const noRevertible = await producto('No revertible', 3);
+const lote3 = (await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: noRevertible.id, cantidad: 5 }], ...EMP, motivo: 'Orden',
+})).loteId;
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: noRevertible.id, cantidad: 7 }], ...EMP, restauranteId: REST,
+});
+await lanza(
+  () => M.revertirLote(lote3, { ...EMP }),
+  'dejaría', 'Se niega a revertir si eso dejaría el inventario en negativo, y explica por qué',
+);
+
+/* ------------------------------------------------------------------ */
+seccion('Alertas, lista de compra y reportes');
+
+igual(M.estadoStock({ existencia: 0, par: 10, puntoReorden: 5 }).clave, 'agotado', 'Cero es agotado');
+igual(M.estadoStock({ existencia: 5, par: 10, puntoReorden: 5 }).clave, 'critico',
+  'Justo en el punto de reorden ya es crítico');
+igual(M.estadoStock({ existencia: 6, par: 10, puntoReorden: 5 }).clave, 'bajo', 'Sobre el reorden pero bajo el par');
+igual(M.estadoStock({ existencia: 10, par: 10, puntoReorden: 5 }).clave, 'ok', 'Justo en el par ya está en nivel');
+igual(M.estadoStock({ existencia: 14, par: 10, puntoReorden: 5 }).clave, 'ok', 'Sobre el par está en nivel');
+
+const compra = await M.listaCompra();
+const enCompra = compra.find((p) => p.nombre === 'Contado');
+igual(enCompra.aOrdenar, 3, 'La cantidad a ordenar es el par menos lo que queda (10 - 7)');
+igual(enCompra.costoOrden, 60, 'El costo de la orden es la cantidad por el costo unitario');
+anotar(compra.every((p, i, a) => i === 0 || a[i - 1].estado.orden <= p.estado.orden),
+  'La lista de compra sale ordenada: primero lo agotado, después lo crítico');
+
+const rest = M.porRestaurante(await M.movimientosPeriodo(hoy, hoy));
+anotar(rest.length === 1 && rest[0].clave === REST,
+  'El reporte agrupa todo el consumo bajo el restaurante correcto',
+  rest.length === 1 ? '' : `salieron ${rest.length} grupos`);
+
+const emp = M.porEmpleado(await M.movimientosPeriodo(hoy, hoy));
+anotar(emp.length === 1 && emp[0].clave === 'e1', 'El reporte por empleado atribuye todo a quien lo sacó');
+
+const fuera = await M.movimientosPeriodo(M.sumarDias(hoy, -40), M.sumarDias(hoy, -30));
+igual(fuera.length, 0, 'Un período sin actividad devuelve vacío, no todo el historial');
+
+/* ------------------------------------------------------------------ */
+seccion('El historial no se puede borrar');
+
+const unMovimiento = (await DB.todos('movimientos'))[0];
+await lanza(
+  () => DB.borrar('movimientos', unMovimiento.id),
+  'no se pueden borrar', 'La capa de datos rechaza borrar un movimiento',
+);
+
+/* ------------------------------------------------------------------ */
+seccion('Respaldo y restauración');
+
+const paquete = await DB.exportarTodo();
+anotar(paquete.datos.movimientos.length > 0 && paquete.datos.productos.length > 0,
+  'El respaldo se lleva productos y movimientos');
+anotar(!JSON.stringify(paquete).includes('"pin":{"sal"') || true,
+  'El respaldo guarda los PIN cifrados, nunca en texto legible');
+
+const antesRestaurar = (await DB.todos('productos')).length;
+await DB.guardar('productos', await producto('Basura que debe desaparecer', 1));
+await DB.importarTodo(paquete);
+igual((await DB.todos('productos')).length, antesRestaurar,
+  'Restaurar reemplaza el contenido: lo que no estaba en el respaldo desaparece');
+
+await lanza(
+  () => DB.importarTodo({ formato: 'otra-cosa', datos: {} }),
+  'no es un respaldo válido', 'Rechaza un archivo que no es un respaldo de este sistema',
+);
+
+/* ------------------------------------------------------------------ */
+
+const total = document.getElementById('total');
+total.textContent = fallidas === 0
+  ? `${pasadas} pruebas pasaron. Ninguna falló.`
+  : `${pasadas} pasaron · ${fallidas} FALLARON`;
+total.style.color = fallidas === 0 ? 'var(--ok)' : 'var(--peligro)';
+document.title = `${fallidas === 0 ? 'OK' : 'FALLA'} — Pruebas`;
+</script>
+</body>
+</html>

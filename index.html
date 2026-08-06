@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es-PR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Almacén">
+<meta name="theme-color" content="#121317">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<title>Almacén de Licores</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="iconos/icono-180.png">
+<link rel="icon" href="iconos/icono-192.png">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Carga -->
+  <section class="pantalla activa" id="pantalla-carga">
+    <div class="cuerpo centrado">
+      <div class="marca">
+        <h2>Almacén de Licores</h2>
+        <p id="carga-texto">Abriendo la base de datos…</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Configuración inicial -->
+  <section class="pantalla" id="pantalla-config">
+    <div class="cuerpo centrado">
+      <div style="width:100%;max-width:520px">
+        <div class="marca">
+          <h2>Configuración inicial</h2>
+          <p>Solo se hace una vez. Crea la cuenta de gerencia que va a administrar el almacén.</p>
+        </div>
+        <div class="campo">
+          <label for="cfg-nombre">Nombre del gerente</label>
+          <input id="cfg-nombre" type="text" autocomplete="off" autocapitalize="words" placeholder="Nombre y apellido">
+        </div>
+        <div class="campo">
+          <label for="cfg-pin">PIN de gerencia (6 dígitos)</label>
+          <input id="cfg-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">
+          <p class="ayuda">Este PIN abre el área de administración: catálogo, entradas, ajustes, reportes y respaldos. No lo compartas con el personal de salón.</p>
+        </div>
+        <div class="campo">
+          <label for="cfg-pin2">Repite el PIN</label>
+          <input id="cfg-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">
+        </div>
+        <div class="campo">
+          <label for="cfg-ejemplo">Catálogo inicial</label>
+          <select id="cfg-ejemplo">
+            <option value="si">Cargar catálogo de ejemplo (58 productos y 8 empleados de prueba)</option>
+            <option value="no">Empezar vacío</option>
+          </select>
+          <p class="ayuda">El catálogo de ejemplo se edita o se borra completo desde Administración. Los empleados de prueba no traen PIN: cada uno lo crea la primera vez que entra.</p>
+        </div>
+        <p class="mensaje-error" id="cfg-error"></p>
+        <button class="btn btn-primario btn-ancho" id="cfg-crear">Crear y empezar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Restaurantes -->
+  <section class="pantalla" id="pantalla-restaurantes">
+    <div class="cuerpo centrado">
+      <div class="marca">
+        <h2>Almacén de Licores</h2>
+        <p id="rest-sub">Selecciona tu restaurante</p>
+      </div>
+      <div class="rejilla-restaurantes" id="rejilla-restaurantes"></div>
+    </div>
+    <div class="pie">
+      <span class="crece" id="pie-info"></span>
+      <button class="btn btn-fantasma btn-chico" id="btn-admin">Administración</button>
+    </div>
+  </section>
+
+  <!-- Empleados -->
+  <section class="pantalla" id="pantalla-empleados">
+    <div class="barra">
+      <button class="btn btn-fantasma btn-chico" data-volver="restaurantes">Atrás</button>
+      <div class="identidad">
+        <span class="punto-rest" id="emp-punto"></span>
+        <div>
+          <h1 id="emp-titulo">Restaurante</h1>
+          <p class="sub">¿Quién eres?</p>
+        </div>
+      </div>
+      <span class="crece"></span>
+    </div>
+    <div class="cuerpo">
+      <div class="rejilla-empleados" id="rejilla-empleados"></div>
+    </div>
+  </section>
+
+  <!-- PIN -->
+  <section class="pantalla" id="pantalla-pin">
+    <div class="barra">
+      <button class="btn btn-fantasma btn-chico" id="pin-atras" data-volver="empleados">Atrás</button>
+      <span class="crece"></span>
+    </div>
+    <div class="cuerpo centrado">
+      <div class="pin-caja" id="pin-caja">
+        <h2 class="pin-titulo" id="pin-titulo">Entra tu PIN</h2>
+        <p class="pin-sub" id="pin-sub"></p>
+        <div class="pin-puntos" id="pin-puntos"></div>
+        <div class="teclado" id="pin-teclado"></div>
+        <p class="mensaje-error" id="pin-error"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel de salida -->
+  <section class="pantalla" id="pantalla-panel">
+    <div class="barra">
+      <div class="identidad">
+        <span class="punto-rest" id="panel-punto"></span>
+        <div>
+          <h1 id="panel-titulo">Restaurante</h1>
+          <p class="sub" id="panel-sub">Empleado</p>
+        </div>
+      </div>
+      <span class="crece"></span>
+      <div class="sesion-aviso" id="sesion-aviso">
+        <span id="sesion-texto"></span>
+        <span class="barra-tiempo"><i id="sesion-barra"></i></span>
+      </div>
+      <button class="btn btn-fantasma btn-chico" id="btn-salir">Cerrar sesión</button>
+    </div>
+    <div class="panel-cuerpo">
+      <div class="columna-productos">
+        <div class="tiras-categorias" id="tiras-categorias"></div>
+        <div class="rejilla-productos" id="rejilla-productos"></div>
+      </div>
+      <aside class="carrito">
+        <h3>Lo que te llevas</h3>
+        <div class="carrito-lista" id="carrito-lista"></div>
+        <div class="carrito-pie">
+          <div class="carrito-total"><span>Total de botellas</span><b id="carrito-total">0</b></div>
+          <button class="btn btn-primario btn-ancho" id="btn-confirmar" disabled>Confirmar salida</button>
+          <button class="btn btn-fantasma btn-ancho btn-chico" id="btn-vaciar" disabled>Vaciar</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Administración -->
+  <section class="pantalla" id="pantalla-admin">
+    <div class="barra">
+      <button class="btn btn-fantasma btn-chico" id="admin-salir">Salir</button>
+      <div>
+        <h1>Administración</h1>
+        <p class="sub" id="admin-sub"></p>
+      </div>
+      <span class="crece"></span>
+      <div class="sesion-aviso" id="admin-sesion"></div>
+    </div>
+    <div class="admin-tabs" id="admin-tabs"></div>
+    <div class="cuerpo" id="admin-cuerpo"></div>
+  </section>
+
+</div>
+
+<!-- Modal genérico -->
+<div class="velo" id="velo">
+  <div class="modal" id="modal">
+    <h3 id="modal-titulo"></h3>
+    <p class="modal-sub" id="modal-sub"></p>
+    <div class="modal-cuerpo" id="modal-cuerpo"></div>
+    <div class="modal-pie" id="modal-pie"></div>
+  </div>
+</div>
+
+<!-- Aviso flotante -->
+<div class="brindis" id="brindis">
+  <div class="txt"><span id="brindis-texto"></span><small id="brindis-sub"></small></div>
+  <button class="btn btn-fantasma btn-chico" id="brindis-accion" hidden></button>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
