@@ -11,9 +11,11 @@ Guía para operar el sistema. No hace falta saber nada de computadoras.
 3. Toca **Añadir a pantalla de inicio** y luego **Añadir**.
 4. Cierra Safari. De ahora en adelante se abre desde el icono de la botella.
 
-**Importante:** hay que abrirlo siempre desde ese icono, no desde Safari. Así
-funciona a pantalla completa y sin internet. Abrirlo como pestaña de Safari
-además expone los datos a que el navegador los borre por falta de uso.
+**Importante:** hay que abrirlo siempre desde ese icono, **nunca desde Safari**.
+No es solo comodidad: Safari borra los datos de un sitio que pasa siete días sin
+usarse. Las apps añadidas a la pantalla de inicio están fuera de esa regla.
+Si lo usan como pestaña de Safari, un fin de semana largo puede costarles el
+inventario completo.
 
 Esto no sustituye el respaldo (punto 7). Nada de lo que hace iOS por su cuenta
 es una copia de seguridad que puedas dar por garantizada.

@@ -77,11 +77,17 @@ python3 herramientas/generar-iconos.py
   que actualizar. Se abre el archivo y funciona.
 - **IndexedDB y no localStorage.** Hacen falta transacciones atómicas: un lote de
   salida tiene que entrar completo o no entrar. localStorage no da eso.
-- **PWA instalada en la pantalla de inicio, no una pestaña.** Abre a pantalla
-  completa, funciona sin internet, y el almacenamiento de una app instalada no
-  está sujeto a las mismas políticas de expiración que una web en Safari.
-  *Pendiente de confirmar contra la documentación de Apple; el diseño no depende
-  de esa respuesta porque el respaldo manual va igual.*
+- **PWA instalada en la pantalla de inicio, no una pestaña.** Verificado contra
+  la documentación de WebKit: el tope de 7 días sobre el almacenamiento escribible
+  por scripts (IndexedDB incluido) **no aplica** a las apps añadidas a la pantalla
+  de inicio — su dominio se salta el algoritmo de borrado y sus datos quedan
+  aislados de Safari, con su propio contador de días de uso. Abierta como pestaña
+  de Safari, en cambio, IndexedDB sí se borra tras 7 días sin interacción.
+  Matiz que importa: WebKit lo redacta como "no esperamos que se borren", no como
+  una garantía, y la expulsión por falta de espacio en el dispositivo sigue
+  existiendo. Por eso el respaldo manual no es opcional.
+  <https://webkit.org/tracking-prevention/> y
+  <https://webkit.org/blog/14403/updates-to-storage-policy/>
 - **Red primero en el service worker.** Con caché primero, subir una corrección
   no la aplicaba: el iPad seguía abriendo la versión vieja. Pasó durante el
   desarrollo, y también contaminó la base de datos real con datos de prueba.
