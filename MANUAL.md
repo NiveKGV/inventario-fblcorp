@@ -12,7 +12,11 @@ Guía para operar el sistema. No hace falta saber nada de computadoras.
 4. Cierra Safari. De ahora en adelante se abre desde el icono de la botella.
 
 **Importante:** hay que abrirlo siempre desde ese icono, no desde Safari. Así
-funciona a pantalla completa, sin internet, y los datos quedan seguros.
+funciona a pantalla completa y sin internet. Abrirlo como pestaña de Safari
+además expone los datos a que el navegador los borre por falta de uso.
+
+Esto no sustituye el respaldo (punto 7). Nada de lo que hace iOS por su cuenta
+es una copia de seguridad que puedas dar por garantizada.
 
 ---
 

@@ -17,6 +17,13 @@ import {
   brindis, dinero, numero, descargar, aCSV,
 } from './ui.js';
 
+/* Topes de longitud. No son cosmética: la lista de compra tiene botón de
+   imprimir, y un nombre de producto sin límite se convierte en papel saliendo
+   de la impresora del restaurante. También rompe las tarjetas del panel. */
+const LARGO = {
+  nombre: 60, tamano: 20, empleado: 50, motivo: 120, referencia: 80,
+};
+
 const TABS = [
   ['resumen', 'Resumen'],
   ['inventario', 'Inventario'],
@@ -236,11 +243,13 @@ async function modalProducto(producto) {
     existencia: 0, par: 6, puntoReorden: 3, costo: 0,
   };
 
-  const nombre = el('input', { type: 'text', value: p.nombre, autocapitalize: 'words' });
+  const nombre = el('input', {
+    type: 'text', value: p.nombre, autocapitalize: 'words', maxlength: String(LARGO.nombre),
+  });
   const categoria = el('select', {}, categorias.map((c) => el('option', {
     value: c.id, texto: c.nombre, selected: c.id === p.categoriaId,
   })));
-  const tamano = el('input', { type: 'text', value: p.tamano || '' });
+  const tamano = el('input', { type: 'text', value: p.tamano || '', maxlength: String(LARGO.tamano) });
   const par = el('input', { type: 'number', min: '0', step: '1', value: String(p.par) });
   const reorden = el('input', { type: 'number', min: '0', step: '1', value: String(p.puntoReorden) });
   const costo = el('input', { type: 'number', min: '0', step: '0.01', value: String(p.costo || 0) });
@@ -289,6 +298,10 @@ async function modalProducto(producto) {
           const vReorden = parseInt(reorden.value, 10);
           const vExistencia = parseInt(existencia.value, 10);
           if (n.length < 2) { err.textContent = 'Escribe el nombre del producto.'; return; }
+          if (n.length > LARGO.nombre) {
+            err.textContent = `El nombre no puede pasar de ${LARGO.nombre} caracteres: no cabe en las teclas del panel ni en la lista impresa.`;
+            return;
+          }
           if (!Number.isInteger(vPar) || vPar < 0) { err.textContent = 'El nivel par debe ser un entero de cero o más.'; return; }
           if (!Number.isInteger(vReorden) || vReorden < 0) { err.textContent = 'El punto de reorden debe ser un entero de cero o más.'; return; }
           if (vReorden > vPar) { err.textContent = 'El punto de reorden no puede ser mayor que el par: se pondría en rojo permanentemente.'; return; }
@@ -355,7 +368,7 @@ async function vistaCompra() {
     }),
   );
 
-  const proveedor = el('input', { type: 'text', placeholder: 'Proveedor o número de factura' });
+  const proveedor = el('input', { type: 'text', maxlength: String(LARGO.referencia), placeholder: 'Proveedor o número de factura' });
 
   return el('div', {}, [
     seccion('Lista de compra',
@@ -415,7 +428,7 @@ function exportarCompra(lista) {
 async function vistaConteo() {
   const productos = await productosActivos();
   const contados = new Map();
-  const motivo = el('input', { type: 'text', placeholder: 'Conteo semanal, rotura, merma…' });
+  const motivo = el('input', { type: 'text', maxlength: String(LARGO.motivo), placeholder: 'Conteo semanal, rotura, merma…' });
   const resumen = el('p', { clase: 'desc', texto: 'Ningún producto tiene diferencia todavía.' });
 
   const actualizar = () => {
@@ -503,7 +516,7 @@ async function vistaDevolucion() {
   const cantidades = new Map();
   const restaurante = el('select', {}, restaurantes.sort((a, b) => a.orden - b.orden)
     .map((r) => el('option', { value: r.id, texto: r.nombre })));
-  const motivo = el('input', { type: 'text', placeholder: 'Botella sin abrir, pedido cancelado…' });
+  const motivo = el('input', { type: 'text', maxlength: String(LARGO.motivo), placeholder: 'Botella sin abrir, pedido cancelado…' });
   const buscador = el('input', { type: 'search', placeholder: 'Buscar producto…', autocomplete: 'off' });
   const contenedor = el('div');
 
@@ -842,7 +855,7 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
   const rol = rolFijo || empleado?.rol || 'empleado';
   const largoPin = rol === 'gerente' ? 6 : 4;
 
-  const nombre = el('input', { type: 'text', value: empleado?.nombre || '', autocapitalize: 'words' });
+  const nombre = el('input', { type: 'text', value: empleado?.nombre || '', autocapitalize: 'words', maxlength: String(LARGO.empleado) });
   const selRest = el('select', {}, restaurantes.sort((a, b) => a.orden - b.orden).map((r) => el('option', {
     value: r.id, texto: r.nombre, selected: r.id === (empleado?.restauranteId || restauranteId),
   })));

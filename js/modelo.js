@@ -159,7 +159,9 @@ async function registrarLote({
         empleadoId,
         empleadoNombre,
         costoUnitario: producto.costo || 0,
-        motivo: motivo.trim(),
+        // Tope duro en el modelo, no solo en el formulario: el motivo viaja al
+        // CSV y a la lista impresa. Un texto sin límite se convierte en papel.
+        motivo: motivo.trim().slice(0, 200),
         autorizadoPor,
         negativoPermitido: despues < 0,
         fechaISO,
