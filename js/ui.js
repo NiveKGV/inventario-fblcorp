@@ -138,9 +138,10 @@ const fmtDinero = new Intl.NumberFormat('en-US', { style: 'currency', currency: 
 const dinero = (n) => fmtDinero.format(Number(n) || 0);
 const numero = (n) => new Intl.NumberFormat('es-PR').format(Number(n) || 0);
 
-function iniciales(nombre) {
-  const partes = String(nombre).trim().split(/\s+/);
-  return ((partes[0]?.[0] || '') + (partes[1]?.[0] || '')).toUpperCase();
+/* Quita acentos y baja a minúsculas para que el buscador encuentre "Patrón"
+   escribiendo "patron", que es como lo va a escribir alguien apurado. */
+function normalizar(texto) {
+  return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /* Descarga un archivo. En iPad esto abre la hoja de compartir para guardarlo en
@@ -167,5 +168,5 @@ export {
   $, $$, el, mostrarPantalla, pantallaActual,
   abrirModal, cerrarModal, modalAbierto, confirmar,
   brindis, ocultarBrindis,
-  dinero, numero, iniciales, descargar, aCSV,
+  dinero, numero, normalizar, descargar, aCSV,
 };

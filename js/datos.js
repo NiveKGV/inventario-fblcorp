@@ -101,15 +101,19 @@ const CATALOGO = [
   ['Dolin Dry Vermut', 'otros', '750 ml', 2, 6, 3, 16.00],
 ];
 
+/* Los códigos de prueba son distintos entre sí a propósito: el sistema
+   identifica a la persona solo por el código, así que dos iguales le cargarían
+   las botellas a la equivocada. Se muestran una vez al configurar y después
+   quedan cifrados como cualquier otro. */
 const EMPLEADOS_EJEMPLO = [
-  ['Carlos Vázquez', 'la-madre'],
-  ['María Rivera', 'la-madre'],
-  ['José Colón', 'la-o'],
-  ['Ana Rosado', 'la-o'],
-  ['Luis Ortiz', 'la-grieta'],
-  ['Sofía Delgado', 'la-grieta'],
-  ['Pedro Santiago', 'el-mas-alla'],
-  ['Gabriela Nieves', 'el-mas-alla'],
+  ['Carlos Vázquez', 'la-madre', '40317'],
+  ['María Rivera', 'la-madre', '52846'],
+  ['José Colón', 'la-o', '61930'],
+  ['Ana Rosado', 'la-o', '27584'],
+  ['Luis Ortiz', 'la-grieta', '83162'],
+  ['Sofía Delgado', 'la-grieta', '19475'],
+  ['Pedro Santiago', 'el-mas-alla', '70629'],
+  ['Gabriela Nieves', 'el-mas-alla', '35091'],
 ];
 
 function productosIniciales() {
@@ -129,17 +133,18 @@ function productosIniciales() {
   }));
 }
 
+/* Devuelve los empleados con `codigoVisible` en claro. Quien llame a esta
+   función tiene que cifrarlo y quitar ese campo antes de guardar. */
 function empleadosEjemplo() {
-  return EMPLEADOS_EJEMPLO.map(([nombre, restauranteId]) => ({
+  return EMPLEADOS_EJEMPLO.map(([nombre, restauranteId, codigoVisible]) => ({
     id: nuevoId('e'),
     nombre,
     restauranteId,
     rol: 'empleado',
-    pin: null,
+    codigo: null,
+    codigoVisible,
     activo: true,
     ejemplo: true,
-    intentosFallidos: 0,
-    bloqueadoHasta: null,
     creado: new Date().toISOString(),
   }));
 }

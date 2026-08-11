@@ -232,6 +232,30 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .panel-cuerpo { display: flex; flex: 1; min-height: 0; }
 .columna-productos { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
+.barra-busqueda {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 22px 0;
+  flex: 0 0 auto;
+}
+
+.barra-busqueda input {
+  flex: 1;
+  min-height: 58px;
+  padding: 12px 18px;
+  border-radius: 29px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  font-size: 18px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.barra-busqueda input::placeholder { color: var(--texto-3); }
+.barra-busqueda input:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+.barra-busqueda input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
 .tiras-categorias {
   display: flex;
   gap: 10px;
@@ -240,8 +264,12 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
   flex: 0 0 auto;
   border-bottom: 1px solid var(--borde);
   scrollbar-width: none;
+  transition: opacity .15s ease;
 }
 .tiras-categorias::-webkit-scrollbar { display: none; }
+/* Mientras se busca, las categorías siguen ahí para volver de un toque, pero
+   apagadas: lo que manda en la rejilla es la búsqueda, no la categoría. */
+.tiras-categorias.apagadas { opacity: .45; }
 
 .chip-categoria {
   min-height: 54px;
@@ -288,7 +316,18 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
   transition: transform .07s ease, background .1s ease;
 }
 .tecla-producto:active { transform: scale(.97); background: var(--panel-2); }
-.tecla-producto .nom { font-size: 16px; font-weight: 650; line-height: 1.25; }
+.tecla-producto .nom { font-size: 16px; font-weight: 650; line-height: 1.25; display: block; }
+/* Al buscar, los resultados vienen de todas las categorías: sin esta etiqueta
+   no se sabe si el "Don Julio" que aparece es el tequila o el mezcal. */
+.tecla-producto .cat {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--texto-3);
+  margin-bottom: 3px;
+}
 .tecla-producto .fila { display: flex; align-items: baseline; gap: 8px; width: 100%; }
 .tecla-producto .cant { font-size: 27px; font-weight: 700; color: var(--estado); line-height: 1; }
 .tecla-producto .uni { font-size: 13px; color: var(--texto-3); }
@@ -469,6 +508,13 @@ tbody tr:active { background: var(--panel); }
 .identidad .punto-rest { width: 12px; height: 34px; border-radius: 6px; background: var(--acento); }
 
 .vacio { text-align: center; color: var(--texto-3); padding: 46px 20px; font-size: 16px; line-height: 1.6; }
+
+.pie-nota { font-size: 13px; color: var(--texto-3); }
+
+/* La caja del código de acceso es más ancha que la del teclado de PIN viejo:
+   es la primera pantalla que ve todo el mundo y tiene que respirar. */
+#pantalla-acceso .pin-caja { max-width: 400px; }
+#pantalla-acceso .marca { margin-bottom: 26px; }
 
 .lista-simple { display: grid; gap: 10px; }
 .item-lista {

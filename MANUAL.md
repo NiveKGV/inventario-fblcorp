@@ -24,24 +24,28 @@ es una copia de seguridad que puedas dar por garantizada.
 
 ## 2. La primera vez
 
-El sistema pide crear la cuenta de gerencia: un nombre y un **PIN de 6 dígitos**.
-Ese PIN abre el área de Administración. No se comparte con el personal de salón.
+El sistema pide crear la cuenta de gerencia: un nombre y un **código de 5
+dígitos**. Con ese código entras directo a Administración. No se comparte con el
+personal de salón.
+
+Si cargaste el catálogo de ejemplo, el sistema te muestra **una sola vez** los
+códigos de los empleados de prueba. Anótalos en ese momento: después quedan
+cifrados y no hay forma de volver a verlos.
 
 Después, entra a **Administración → Empleados** y **crea un segundo gerente**.
-Si solo una persona conoce el PIN, el día que no esté nadie puede recibir
+Si solo una persona conoce el código, el día que no esté nadie puede recibir
 mercancía ni sacar reportes.
 
 ---
 
 ## 3. Cómo saca botellas un empleado
 
-1. Toca su **restaurante**.
-2. Toca **su nombre**.
-3. Entra **su PIN de 4 dígitos**. La primera vez lo crea él mismo — que el
-   gerente esté al lado cuando lo haga.
-4. Escoge la **categoría** (Whisky, Ron, Vino…) y toca las botellas que se lleva.
-5. Escoge la cantidad de cada una. Puede juntar varias en un solo viaje.
-6. Toca **Confirmar salida**.
+1. Entra **su código de 5 dígitos**. Nada más. El sistema ya sabe quién es y de
+   qué restaurante.
+2. Busca el licor escribiendo el nombre, o escoge la **categoría** (Whisky, Ron,
+   Vino…) y toca las botellas que se lleva.
+3. Escoge la cantidad de cada una. Puede juntar varias en un solo viaje.
+4. Toca **Confirmar salida**.
 
 Listo. El inventario baja solo y queda registrado quién, de qué restaurante, qué
 se llevó y a qué hora.
@@ -51,6 +55,22 @@ corrige el gerente desde el Historial.
 
 **La sesión se cierra sola al minuto de no tocar nada.** Es a propósito: así
 nadie saca botellas a nombre de otro.
+
+### El buscador
+
+En el panel hay una caja de búsqueda arriba. Escribiendo "patron" aparece Patrón
+Silver aunque no se escriba la tilde; escribiendo "don julio" aparecen los dos;
+escribiendo "ron" aparece la categoría completa y escribiendo "caja", las
+cervezas. Para volver a las categorías, se toca **Limpiar** o cualquier categoría.
+
+### Cambiar el código
+
+El gerente asigna el primer código. Cada empleado debería cambiarlo por uno que
+solo él conozca, desde **Cambiar mi código** en el panel. Hasta que lo haga, el
+gerente conoce su código — dilo claro cuando entrenes al personal.
+
+Dos personas **no pueden tener el mismo código**. El sistema no lo permite,
+porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
 
 ---
 
@@ -125,10 +145,14 @@ Todo se puede exportar a Excel con **Exportar CSV**.
 
 ## 9. Cosas que conviene saber
 
-- **Un PIN de 4 dígitos dice quién fue, no impide que alguien use el de otro.**
-  Si alguien ve el PIN de un compañero, puede usarlo. Que cada quien lo escriba
-  tapando el teclado, como en el cajero.
-- Después de 5 intentos fallidos, ese empleado queda bloqueado un minuto.
+- **Un código de 5 dígitos dice quién fue, no impide que alguien use el de otro.**
+  Si alguien ve el código de un compañero, puede usarlo. Que cada quien lo
+  escriba tapando el teclado, como en el cajero.
+- Después de 5 intentos fallidos, **el teclado se bloquea** un minuto, y el doble
+  cada vez que vuelva a pasar, hasta cinco minutos. El bloqueo es del iPad, no de
+  una persona: hasta que el código no acierta, el sistema no sabe quién está
+  intentando. **Un código de gerencia entra igual y levanta el bloqueo**, para
+  que un dedazo en pleno servicio no deje el almacén cerrado.
 - Si un empleado intenta sacar más de lo que el sistema dice que hay, se detiene
   y pide autorización de un gerente. No es un error del sistema: es que el
   conteo no cuadra y hay que arreglarlo con un conteo físico.

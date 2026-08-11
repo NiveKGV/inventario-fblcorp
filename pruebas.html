@@ -355,6 +355,79 @@ await lanza(
 );
 
 /* ------------------------------------------------------------------ */
+seccion('Códigos de acceso');
+
+const C = await import('./js/cripto.js');
+const sal = C.nuevaSal();
+const salOtra = C.nuevaSal();
+
+igual(sal.length > 0 && sal !== salOtra, true, 'Cada instalación genera su propia sal');
+
+const hA = await C.derivarCodigo('40317', sal);
+const hB = await C.derivarCodigo('40317', sal);
+const hC = await C.derivarCodigo('40318', sal);
+const hD = await C.derivarCodigo('40317', salOtra);
+
+igual(hA === hB, true, 'El mismo código con la misma sal da el mismo hash: así se identifica a la persona');
+igual(hA === hC, false, 'Códigos distintos dan hashes distintos');
+igual(hA === hD, false, 'El mismo código con otra sal da otro hash: un respaldo robado no sirve en otra instalación');
+igual(hA.includes('40317'), false, 'El código no aparece legible dentro del hash');
+
+igual(C.igualesConstante(hA, hB), true, 'La comparación en tiempo constante reconoce dos hashes iguales');
+igual(C.igualesConstante(hA, hC), false, 'Y rechaza dos distintos');
+igual(C.igualesConstante(hA, `${hA}x`), false, 'Rechaza hashes de largo distinto sin reventar');
+igual(C.igualesConstante(null, hA), false, 'Rechaza un valor nulo sin reventar');
+
+igual(C.LARGO_CODIGO, 5, 'El código es de 5 dígitos');
+[['11111', true], ['00000', true], ['12345', true], ['54321', true], ['13579', true],
+  ['40317', false], ['83162', false], ['27584', false]].forEach(([codigo, esDebil]) => {
+  igual(C.codigoDebil(codigo), esDebil,
+    `${codigo} ${esDebil ? 'se rechaza por obvio' : 'se acepta'}`);
+});
+
+// La detección de repetidos es el pilar del diseño: sin ella el sistema le
+// carga las botellas a la persona equivocada.
+const plantilla = [
+  { id: 'x1', nombre: 'Ana', activo: true, codigo: await C.derivarCodigo('40317', sal) },
+  { id: 'x2', nombre: 'Beto', activo: true, codigo: await C.derivarCodigo('52846', sal) },
+];
+const repetido = await C.derivarCodigo('40317', sal);
+const choque = plantilla.find((e) => C.igualesConstante(e.codigo, repetido));
+igual(choque && choque.nombre, 'Ana', 'Un código repetido se detecta y se puede señalar a quién pertenece');
+const libre = await C.derivarCodigo('61930', sal);
+igual(plantilla.some((e) => C.igualesConstante(e.codigo, libre)), false, 'Un código libre no choca con nadie');
+
+const t0 = performance.now();
+await C.derivarCodigo('40317', sal);
+const ms = performance.now() - t0;
+anotar(ms < 600, 'Identificar a una persona por su código toma menos de 600 ms',
+  `medido: ${Math.round(ms)} ms`);
+
+/* ------------------------------------------------------------------ */
+seccion('Buscador de productos');
+
+const { normalizar } = await import('./js/ui.js');
+igual(normalizar('Patrón Silver'), 'patron silver', 'Quita acentos y baja a minúsculas');
+igual(normalizar('MOËT & CHANDON'), 'moet & chandon', 'La diéresis también');
+igual(normalizar('Martín Códax'), 'martin codax', 'Varios acentos en la misma frase');
+
+const catalogo = ['Patrón Silver', 'Don Julio Blanco', 'Don Julio 1942', 'Moët & Chandon Impérial',
+  'Tres Santos', "Jack Daniel's Old No. 7"];
+const buscar = (q) => catalogo.filter((n) => {
+  const terminos = normalizar(q).split(/\s+/).filter(Boolean);
+  return terminos.every((t) => normalizar(n).includes(t));
+});
+
+igual(buscar('patron'), ['Patrón Silver'], 'Encuentra "Patrón" escribiendo "patron", sin acento');
+igual(buscar('moet'), ['Moët & Chandon Impérial'], 'Encuentra "Moët" escribiendo "moet"');
+igual(buscar('don julio'), ['Don Julio Blanco', 'Don Julio 1942'], 'Devuelve los dos Don Julio');
+igual(buscar('julio 1942'), ['Don Julio 1942'], 'Dos palabras sueltas afinan la búsqueda');
+igual(buscar('1942 julio'), ['Don Julio 1942'], 'El orden de las palabras no importa');
+igual(buscar('SANTOS'), ['Tres Santos'], 'No distingue mayúsculas');
+igual(buscar('jack'), ["Jack Daniel's Old No. 7"], 'El apóstrofo no estorba');
+igual(buscar('zzz'), [], 'Una búsqueda sin resultados devuelve vacío, no todo el catálogo');
+
+/* ------------------------------------------------------------------ */
 seccion('Respaldo y restauración');
 
 const paquete = await DB.exportarTodo();

@@ -1,22 +1,31 @@
-/* Arranque, sesión y flujo del empleado.
-   Puerta de entrada: restaurante → empleado → PIN → panel de salida. */
+/* Arranque, acceso y flujo del empleado.
+
+   Puerta de entrada: un solo código. El sistema identifica por él a la persona
+   y el restaurante al que pertenece, y decide si abre el panel de salidas o el
+   área de gerencia. Nadie escoge nombre de una lista.
+
+   Consecuencia que sostiene todo el diseño: los códigos tienen que ser únicos
+   en toda la instalación. Si dos personas comparten código, el sistema le carga
+   las botellas a la equivocada, que es exactamente lo que existe para evitar.
+   La unicidad se impone al crearlos, en admin.js. */
 
 import { DB, nuevoId } from './db.js';
-import { cifrarPin, verificarPin, contextoSeguro } from './cripto.js';
+import {
+  nuevaSal, derivarCodigo, igualesConstante, codigoDebil, contextoSeguro, LARGO_CODIGO,
+} from './cripto.js';
 import { RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo } from './datos.js';
 import {
   estadoStock, registrarLote, revertirLote, productosActivos, resumenAlertas, fechaHoraPR,
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
-  brindis, ocultarBrindis, numero, iniciales,
+  brindis, ocultarBrindis, numero, normalizar,
 } from './ui.js';
 import { abrirAdmin, salirAdmin } from './admin.js';
 
 const INACTIVIDAD_EMPLEADO = 60;   // segundos
-const INACTIVIDAD_GERENTE = 300;   // el gerente hace captura de datos, 60s no alcanza
+const INACTIVIDAD_GERENTE = 300;   // el gerente captura datos, 60 s no alcanza
 const INTENTOS_MAX = 5;
-const BLOQUEO_SEG = 60;
 const SEG_DESHACER = 15;
 
 const estado = {
@@ -27,8 +36,8 @@ const estado = {
   restaurante: null,
   empleado: null,
   categoriaSel: null,
+  busqueda: '',
   carrito: new Map(),
-  ultimoLote: null,
 };
 
 /* ------------------------------------------------------------------ */
@@ -39,14 +48,14 @@ async function iniciar() {
   try {
     if (!contextoSeguro()) {
       $('#carga-texto').textContent = 'Esta app debe abrirse por HTTPS (o desde localhost). '
-        + 'Sin contexto seguro el navegador no permite cifrar los PIN y el sistema no arranca.';
+        + 'Sin contexto seguro el navegador no permite cifrar los códigos y el sistema no arranca.';
       return;
     }
     await DB.abrir();
     const configurado = await DB.leerConfig('configurado', false);
     if (!configurado) { prepararConfigInicial(); return; }
     await cargarCache();
-    mostrarRestaurantes();
+    mostrarAcceso();
   } catch (e) {
     $('#carga-texto').textContent = `No se pudo abrir la base de datos: ${e.message}`;
   }
@@ -71,51 +80,64 @@ function prepararConfigInicial() {
   $('#cfg-crear').onclick = async () => {
     const error = $('#cfg-error');
     const nombre = $('#cfg-nombre').value.trim();
-    const pin = $('#cfg-pin').value.trim();
-    const pin2 = $('#cfg-pin2').value.trim();
+    const codigo = $('#cfg-pin').value.trim();
+    const codigo2 = $('#cfg-pin2').value.trim();
     error.textContent = '';
 
     if (nombre.length < 3) { error.textContent = 'Escribe el nombre completo del gerente.'; return; }
-    if (!/^\d{6}$/.test(pin)) { error.textContent = 'El PIN de gerencia debe tener exactamente 6 dígitos.'; return; }
-    if (/^(\d)\1{5}$/.test(pin) || pin === '123456' || pin === '654321') {
-      error.textContent = 'Ese PIN es demasiado fácil de adivinar. Usa una combinación menos obvia.';
+    if (!new RegExp(`^\\d{${LARGO_CODIGO}}$`).test(codigo)) {
+      error.textContent = `El código debe tener exactamente ${LARGO_CODIGO} dígitos.`; return;
+    }
+    if (codigoDebil(codigo)) {
+      error.textContent = 'Ese código es demasiado fácil de adivinar. Usa una combinación menos obvia.';
       return;
     }
-    if (pin !== pin2) { error.textContent = 'Los dos PIN no coinciden.'; return; }
+    if (codigo !== codigo2) { error.textContent = 'Los dos códigos no coinciden.'; return; }
 
     $('#cfg-crear').disabled = true;
     $('#cfg-crear').textContent = 'Creando…';
     try {
       const conEjemplo = $('#cfg-ejemplo').value === 'si';
+      const sal = nuevaSal();
+      await DB.escribirConfig('sal_codigos', sal);
+
       await DB.guardarVarios('restaurantes', RESTAURANTES);
       await DB.guardarVarios('categorias', CATEGORIAS);
+
+      let ejemplos = [];
       if (conEjemplo) {
         await DB.guardarVarios('productos', productosIniciales());
-        await DB.guardarVarios('empleados', empleadosEjemplo());
+        ejemplos = empleadosEjemplo();
+        for (const emp of ejemplos) emp.codigo = await derivarCodigo(emp.codigoVisible, sal);
+        await DB.guardarVarios('empleados', ejemplos.map(({ codigoVisible, ...resto }) => resto));
       }
+
       await DB.guardar('empleados', {
         id: nuevoId('g'),
         nombre,
         restauranteId: null,
         rol: 'gerente',
-        pin: await cifrarPin(pin),
+        codigo: await derivarCodigo(codigo, sal),
         activo: true,
         ejemplo: false,
-        intentosFallidos: 0,
-        bloqueadoHasta: null,
         creado: new Date().toISOString(),
       });
+
       await DB.escribirConfig('inicio_dia_operativo', 5);
       await DB.escribirConfig('nombre_almacen', 'Almacén central');
       await DB.escribirConfig('configurado', true);
       await cargarCache();
-      mostrarRestaurantes();
-      brindis({
-        texto: 'Sistema listo',
-        sub: 'Crea un segundo gerente en Administración: si solo una persona conoce el PIN, el almacén se queda sin administrar el día que no esté.',
-        tipo: 'exito',
-        segundos: 12,
-      });
+      mostrarAcceso();
+
+      if (ejemplos.length) mostrarCodigosEjemplo(ejemplos);
+      else {
+        brindis({
+          texto: 'Sistema listo',
+          sub: 'Registra un segundo gerente en Administración: si solo una persona conoce el código, el almacén se queda sin administrar el día que no esté.',
+          tipo: 'exito',
+          segundos: 12,
+        });
+      }
     } catch (e) {
       error.textContent = e.message;
       $('#cfg-crear').disabled = false;
@@ -124,32 +146,62 @@ function prepararConfigInicial() {
   };
 }
 
+/* Los códigos de ejemplo se muestran una sola vez y nunca más: quedan cifrados
+   igual que los reales y no hay forma de recuperarlos después. */
+function mostrarCodigosEjemplo(ejemplos) {
+  abrirModal({
+    titulo: 'Códigos de los empleados de prueba',
+    subtitulo: 'Esta lista se muestra una sola vez. Sirve para probar el sistema; bórralos desde '
+      + 'Administración → Sistema antes de ponerlo a trabajar de verdad.',
+    contenido: el('div', { clase: 'lista-simple' }, ejemplos.map((emp) => el('div', { clase: 'item-lista' }, [
+      el('div', { clase: 'crece' }, [
+        el('div', { clase: 't', texto: emp.nombre }),
+        el('div', {
+          clase: 's',
+          texto: RESTAURANTES.find((r) => r.id === emp.restauranteId)?.nombre || '',
+        }),
+      ]),
+      el('div', {
+        texto: emp.codigoVisible,
+        estilo: {
+          fontSize: '26px', fontWeight: '700', letterSpacing: '.12em', fontVariantNumeric: 'tabular-nums',
+        },
+      }),
+    ]))),
+    botones: [{ texto: 'Ya los anoté', clase: 'btn-primario', accion: cerrarModal }],
+  });
+}
+
 /* ------------------------------------------------------------------ */
-/* Pantalla de restaurantes                                            */
+/* Pantalla de acceso: un solo teclado para todos                      */
 /* ------------------------------------------------------------------ */
 
-async function mostrarRestaurantes() {
+let acceso = null;
+
+async function mostrarAcceso() {
   detenerSesion();
-  estado.restaurante = null;
   estado.empleado = null;
+  estado.restaurante = null;
   estado.carrito.clear();
+  estado.busqueda = '';
   await cargarCache();
 
-  const rejilla = $('#rejilla-restaurantes');
-  rejilla.replaceChildren(...estado.restaurantes.map((r) => {
-    const cuantos = estado.empleados.filter((e) => e.restauranteId === r.id).length;
-    return el('button', {
-      clase: 'tarjeta-restaurante',
-      estilo: { '--c': r.color },
-      onclick: () => mostrarEmpleados(r),
-    }, [
-      el('span', { clase: 'punto' }),
-      el('span', { clase: 'nombre', texto: r.nombre }),
-      el('span', {
-        clase: 'meta',
-        texto: cuantos === 1 ? '1 empleado registrado' : `${cuantos} empleados registrados`,
-      }),
-    ]);
+  document.documentElement.style.setProperty('--acento', '#e0a34a');
+  acceso = { valor: '', ocupado: false };
+
+  $('#acceso-sub').textContent = `Entra tu código de ${LARGO_CODIGO} dígitos`;
+  $('#acceso-error').textContent = '';
+  $('#acceso-caja').classList.remove('error');
+
+  $('#acceso-puntos').replaceChildren(
+    ...Array.from({ length: LARGO_CODIGO }, () => el('span', { clase: 'pin-punto' })),
+  );
+
+  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'borrar', '0', 'limpiar'];
+  $('#acceso-teclado').replaceChildren(...teclas.map((t) => {
+    if (t === 'borrar') return el('button', { clase: 'tecla aux', texto: 'Borrar', onclick: () => teclear(null) });
+    if (t === 'limpiar') return el('button', { clase: 'tecla aux', texto: 'Limpiar', onclick: () => teclear('reset') });
+    return el('button', { clase: 'tecla', texto: t, onclick: () => teclear(t) });
   }));
 
   const alertas = await resumenAlertas();
@@ -157,273 +209,150 @@ async function mostrarRestaurantes() {
     ? `${alertas.porOrdenar} ${alertas.porOrdenar === 1 ? 'producto está' : 'productos están'} bajo el nivel par`
     : 'Todo el inventario está en nivel';
 
-  $('#btn-admin').onclick = entrarComoGerente;
-  mostrarPantalla('restaurantes');
-}
-
-/* ------------------------------------------------------------------ */
-/* Pantalla de empleados                                               */
-/* ------------------------------------------------------------------ */
-
-function mostrarEmpleados(restaurante) {
-  estado.restaurante = restaurante;
-  document.documentElement.style.setProperty('--acento', restaurante.color);
-  $('#emp-titulo').textContent = restaurante.nombre;
-  $('#emp-punto').style.background = restaurante.color;
-
-  const lista = estado.empleados
-    .filter((e) => e.restauranteId === restaurante.id && e.rol === 'empleado')
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-
-  const rejilla = $('#rejilla-empleados');
-  if (!lista.length) {
-    rejilla.replaceChildren(el('p', {
-      clase: 'vacio',
-      texto: `No hay empleados registrados en ${restaurante.nombre}. `
-        + 'El gerente los agrega desde Administración → Empleados.',
-    }));
-  } else {
-    rejilla.replaceChildren(...lista.map((emp) => tarjetaEmpleado(emp)));
-  }
-  mostrarPantalla('empleados');
-}
-
-function tarjetaEmpleado(emp) {
-  const bloqueado = emp.bloqueadoHasta && new Date(emp.bloqueadoHasta) > new Date();
-  const sinPin = !emp.pin;
-  return el('button', {
-    clase: `tarjeta-empleado${bloqueado ? ' bloqueado' : ''}`,
-    onclick: () => (bloqueado ? null : pedirPinEmpleado(emp)),
-  }, [
-    el('span', { clase: 'inicial', texto: iniciales(emp.nombre) }),
-    el('span', {}, [
-      el('span', { clase: 'nombre', texto: emp.nombre }),
-      el('br'),
-      el('span', {
-        clase: 'estado',
-        texto: bloqueado ? 'Bloqueado un momento' : (sinPin ? 'Primer ingreso: crea tu PIN' : ''),
-      }),
-    ]),
-  ]);
-}
-
-/* ------------------------------------------------------------------ */
-/* Teclado de PIN                                                      */
-/* ------------------------------------------------------------------ */
-
-let pinEstado = null;
-
-function montarTecladoPin({ titulo, sub, largo, alCompletar, volverA }) {
-  pinEstado = { valor: '', largo, alCompletar, ocupado: false };
-  $('#pin-titulo').textContent = titulo;
-  $('#pin-sub').textContent = sub || '';
-  $('#pin-error').textContent = '';
-  $('#pin-caja').classList.remove('error');
-  $('#pin-atras').dataset.volver = volverA || 'empleados';
-
-  const puntos = $('#pin-puntos');
-  puntos.replaceChildren(...Array.from({ length: largo }, () => el('span', { clase: 'pin-punto' })));
-
-  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'borrar', '0', 'limpiar'];
-  $('#pin-teclado').replaceChildren(...teclas.map((t) => {
-    if (t === 'borrar') {
-      return el('button', { clase: 'tecla aux', texto: 'Borrar', onclick: () => teclearPin(null) });
-    }
-    if (t === 'limpiar') {
-      return el('button', { clase: 'tecla aux', texto: 'Limpiar', onclick: () => teclearPin('reset') });
-    }
-    return el('button', { clase: 'tecla', texto: t, onclick: () => teclearPin(t) });
-  }));
-
-  mostrarPantalla('pin');
+  mostrarPantalla('acceso');
+  await pintarBloqueo();
 }
 
 function pintarPuntos() {
-  $$('#pin-puntos .pin-punto').forEach((p, i) => p.classList.toggle('lleno', i < pinEstado.valor.length));
+  $$('#acceso-puntos .pin-punto').forEach((p, i) => p.classList.toggle('lleno', i < acceso.valor.length));
 }
 
-function teclearPin(digito) {
-  if (!pinEstado || pinEstado.ocupado) return;
-  $('#pin-caja').classList.remove('error');
-  $('#pin-error').textContent = '';
-  if (digito === null) pinEstado.valor = pinEstado.valor.slice(0, -1);
-  else if (digito === 'reset') pinEstado.valor = '';
-  else if (pinEstado.valor.length < pinEstado.largo) pinEstado.valor += digito;
+function errorAcceso(mensaje) {
+  $('#acceso-error').textContent = mensaje;
+  $('#acceso-caja').classList.add('error');
+}
+
+function teclear(digito) {
+  if (!acceso || acceso.ocupado) return;
+  $('#acceso-caja').classList.remove('error');
+  $('#acceso-error').textContent = '';
+  if (digito === null) acceso.valor = acceso.valor.slice(0, -1);
+  else if (digito === 'reset') acceso.valor = '';
+  else if (acceso.valor.length < LARGO_CODIGO) acceso.valor += digito;
   pintarPuntos();
 
-  if (pinEstado.valor.length === pinEstado.largo) {
-    pinEstado.ocupado = true;
-    const valor = pinEstado.valor;
+  if (acceso.valor.length === LARGO_CODIGO) {
+    acceso.ocupado = true;
+    const valor = acceso.valor;
     setTimeout(async () => {
       try {
-        await pinEstado.alCompletar(valor);
+        await intentarAcceso(valor);
       } catch (e) {
-        // Un fallo aquí dejaba a la persona mirando el teclado sin ninguna
-        // explicación. Cualquier error tiene que verse en pantalla.
-        console.error('Fallo al procesar el PIN:', e);
-        errorPin(e.message || 'Algo falló. Vuelve a intentar.');
+        console.error('Fallo al procesar el código:', e);
+        errorAcceso(e.message || 'Algo falló. Vuelve a intentar.');
       } finally {
-        if (pinEstado) { pinEstado.valor = ''; pinEstado.ocupado = false; pintarPuntos(); }
+        if (acceso) { acceso.valor = ''; acceso.ocupado = false; pintarPuntos(); }
       }
     }, 130);
   }
 }
 
-function errorPin(mensaje) {
-  $('#pin-error').textContent = mensaje;
-  $('#pin-caja').classList.add('error');
+/* El bloqueo es del aparato, no de una persona: hasta que el código no acierta
+   no se sabe quién está intentando. Se guarda en la base para que recargar la
+   app no lo reinicie. */
+async function pintarBloqueo() {
+  const hasta = await DB.leerConfig('bloqueado_hasta', null);
+  if (!hasta || new Date(hasta) <= new Date()) return false;
+  const faltan = Math.ceil((new Date(hasta) - new Date()) / 1000);
+  errorAcceso(`Demasiados intentos fallidos. Espera ${faltan} segundos.`);
+  if (acceso) acceso.ocupado = true;
+  setTimeout(async () => {
+    if (acceso) { acceso.ocupado = false; acceso.valor = ''; pintarPuntos(); }
+    $('#acceso-error').textContent = '';
+    $('#acceso-caja').classList.remove('error');
+  }, faltan * 1000);
+  return true;
 }
 
-/* --- PIN de empleado --- */
-
-function pedirPinEmpleado(emp) {
-  if (!emp.pin) { crearPinEmpleado(emp); return; }
-  montarTecladoPin({
-    titulo: emp.nombre,
-    sub: `${estado.restaurante.nombre} · entra tu PIN de 4 dígitos`,
-    largo: 4,
-    volverA: 'empleados',
-    alCompletar: async (pin) => {
-      const actual = await DB.obtener('empleados', emp.id);
-      if (actual.bloqueadoHasta && new Date(actual.bloqueadoHasta) > new Date()) {
-        const faltan = Math.ceil((new Date(actual.bloqueadoHasta) - new Date()) / 1000);
-        errorPin(`Bloqueado. Espera ${faltan} segundos.`);
-        return;
-      }
-      const ok = await verificarPin(pin, actual.pin);
-      if (!ok) {
-        actual.intentosFallidos = (actual.intentosFallidos || 0) + 1;
-        if (actual.intentosFallidos >= INTENTOS_MAX) {
-          actual.bloqueadoHasta = new Date(Date.now() + BLOQUEO_SEG * 1000).toISOString();
-          actual.intentosFallidos = 0;
-          await DB.guardar('empleados', actual);
-          errorPin(`Cinco intentos fallidos. Bloqueado ${BLOQUEO_SEG} segundos.`);
-          setTimeout(() => mostrarEmpleados(estado.restaurante), 1400);
-          return;
-        }
-        await DB.guardar('empleados', actual);
-        errorPin(`PIN incorrecto. Quedan ${INTENTOS_MAX - actual.intentosFallidos} intentos.`);
-        return;
-      }
-      actual.intentosFallidos = 0;
-      actual.bloqueadoHasta = null;
-      await DB.guardar('empleados', actual);
-      await abrirPanel(actual);
-    },
-  });
+async function registrarFallo() {
+  const intentos = (await DB.leerConfig('intentos_fallidos', 0)) + 1;
+  if (intentos < INTENTOS_MAX) {
+    await DB.escribirConfig('intentos_fallidos', intentos);
+    errorAcceso(`Código no reconocido. Quedan ${INTENTOS_MAX - intentos} intentos.`);
+    return;
+  }
+  // Cada tanda de fallos duplica la espera, con techo de 5 minutos. El techo es
+  // bajo a propósito: un bloqueo largo en pleno servicio termina con alguien
+  // sacando botellas sin registrarlas, que es peor que el riesgo que evita.
+  const rondas = (await DB.leerConfig('rondas_bloqueo', 0)) + 1;
+  const segundos = Math.min(60 * (2 ** (rondas - 1)), 300);
+  await DB.escribirConfig('intentos_fallidos', 0);
+  await DB.escribirConfig('rondas_bloqueo', rondas);
+  await DB.escribirConfig('bloqueado_hasta', new Date(Date.now() + segundos * 1000).toISOString());
+  await pintarBloqueo();
 }
 
-function crearPinEmpleado(emp) {
-  let primero = null;
-  montarTecladoPin({
-    titulo: `Hola, ${emp.nombre.split(' ')[0]}`,
-    sub: 'Primer ingreso: crea tu PIN de 4 dígitos. Que el gerente esté presente.',
-    largo: 4,
-    volverA: 'empleados',
-    alCompletar: async (pin) => {
-      if (!primero) {
-        if (/^(\d)\1{3}$/.test(pin) || pin === '1234' || pin === '0000') {
-          errorPin('Ese PIN es demasiado fácil de adivinar. Escoge otro.');
-          return;
-        }
-        primero = pin;
-        $('#pin-titulo').textContent = 'Repite tu PIN';
-        $('#pin-sub').textContent = 'Para confirmar que no hubo un dedazo.';
-        return;
-      }
-      if (pin !== primero) {
-        primero = null;
-        $('#pin-titulo').textContent = `Hola, ${emp.nombre.split(' ')[0]}`;
-        $('#pin-sub').textContent = 'Crea tu PIN de 4 dígitos.';
-        errorPin('Los dos PIN no coinciden. Empieza de nuevo.');
-        return;
-      }
-      const actual = await DB.obtener('empleados', emp.id);
-      actual.pin = await cifrarPin(pin);
-      actual.intentosFallidos = 0;
-      actual.bloqueadoHasta = null;
-      await DB.guardar('empleados', actual);
-      brindis({ texto: 'PIN creado', sub: 'Solo tú lo conoces. Todo lo que saques queda a tu nombre.', tipo: 'exito', segundos: 6 });
-      await abrirPanel(actual);
-    },
-  });
+async function intentarAcceso(codigo) {
+  const bloqueado = Boolean(await DB.leerConfig('bloqueado_hasta', null))
+    && new Date(await DB.leerConfig('bloqueado_hasta', null)) > new Date();
+
+  const sal = await DB.leerConfig('sal_codigos', null);
+  if (!sal) throw new Error('Falta la configuración de seguridad. Restaura un respaldo.');
+
+  const hash = await derivarCodigo(codigo, sal);
+  // Se recorren todos y no se corta al primero: el tiempo de respuesta no debe
+  // depender de en qué posición está la persona en la lista.
+  let encontrado = null;
+  for (const emp of estado.empleados) {
+    if (emp.codigo && igualesConstante(emp.codigo, hash)) encontrado = emp;
+  }
+
+  /* Válvula de escape: durante un bloqueo, un código de gerencia entra igual y
+     lo levanta. Sin esto, cinco dedazos de un mesero dejan el almacén cerrado
+     en pleno servicio y nadie con autoridad para abrirlo. Al atacante no le
+     regala nada: tendría que acertar un código de gerencia, que es tan difícil
+     como antes, y los códigos de empleado siguen bloqueados. */
+  if (bloqueado && encontrado?.rol !== 'gerente') {
+    await pintarBloqueo();
+    return;
+  }
+
+  if (!encontrado) { await registrarFallo(); return; }
+
+  await DB.escribirConfig('intentos_fallidos', 0);
+  await DB.escribirConfig('rondas_bloqueo', 0);
+  await DB.escribirConfig('bloqueado_hasta', null);
+
+  if (encontrado.rol === 'gerente') {
+    if (bloqueado) {
+      brindis({
+        texto: 'Bloqueo levantado',
+        sub: 'El teclado estaba bloqueado por intentos fallidos. Tu código lo abrió.',
+        segundos: 7,
+      });
+    }
+    estado.empleado = encontrado;
+    iniciarSesion(INACTIVIDAD_GERENTE, '#admin-sesion');
+    abrirAdmin(encontrado, { alSalir: mostrarAcceso, refrescarCache: cargarCache, estado });
+    return;
+  }
+
+  const restaurante = estado.restaurantes.find((r) => r.id === encontrado.restauranteId);
+  if (!restaurante) {
+    errorAcceso('Tu restaurante ya no está activo. Habla con el gerente.');
+    return;
+  }
+  await abrirPanel(encontrado, restaurante);
 }
 
-/* --- PIN de gerente --- */
-
-function entrarComoGerente() {
-  const gerentes = estado.empleados.filter((e) => e.rol === 'gerente');
-  if (!gerentes.length) { brindis({ texto: 'No hay ningún gerente registrado.', tipo: 'error' }); return; }
-  if (gerentes.length === 1) { pedirPinGerente(gerentes[0]); return; }
-
-  estado.restaurante = { id: null, nombre: 'Administración', color: '#8a8f9a' };
-  document.documentElement.style.setProperty('--acento', '#8a8f9a');
-  $('#emp-titulo').textContent = 'Administración';
-  $('#emp-punto').style.background = '#8a8f9a';
-  $('#rejilla-empleados').replaceChildren(...gerentes.map((g) => el('button', {
-    clase: 'tarjeta-empleado',
-    onclick: () => pedirPinGerente(g),
-  }, [
-    el('span', { clase: 'inicial', texto: iniciales(g.nombre) }),
-    el('span', {}, [
-      el('span', { clase: 'nombre', texto: g.nombre }),
-      el('br'),
-      el('span', { clase: 'estado', texto: 'Gerencia' }),
-    ]),
-  ])));
-  mostrarPantalla('empleados');
-}
-
-function pedirPinGerente(gerente) {
-  montarTecladoPin({
-    titulo: gerente.nombre,
-    sub: 'PIN de gerencia, 6 dígitos',
-    largo: 6,
-    volverA: 'restaurantes',
-    alCompletar: async (pin) => {
-      const actual = await DB.obtener('empleados', gerente.id);
-      if (actual.bloqueadoHasta && new Date(actual.bloqueadoHasta) > new Date()) {
-        const faltan = Math.ceil((new Date(actual.bloqueadoHasta) - new Date()) / 1000);
-        errorPin(`Bloqueado. Espera ${faltan} segundos.`);
-        return;
-      }
-      if (!await verificarPin(pin, actual.pin)) {
-        actual.intentosFallidos = (actual.intentosFallidos || 0) + 1;
-        if (actual.intentosFallidos >= INTENTOS_MAX) {
-          actual.bloqueadoHasta = new Date(Date.now() + BLOQUEO_SEG * 1000).toISOString();
-          actual.intentosFallidos = 0;
-        }
-        await DB.guardar('empleados', actual);
-        errorPin('PIN incorrecto.');
-        return;
-      }
-      actual.intentosFallidos = 0;
-      actual.bloqueadoHasta = null;
-      await DB.guardar('empleados', actual);
-      estado.empleado = actual;
-      iniciarSesion(INACTIVIDAD_GERENTE, '#admin-sesion');
-      abrirAdmin(actual, { alSalir: mostrarRestaurantes, refrescarCache: cargarCache, estado });
-    },
-  });
-}
-
-/* Pide el PIN de un gerente dentro de un modal, para autorizar una excepción
+/* Pide un código de gerencia dentro de un modal, para autorizar una excepción
    sin que el empleado abandone lo que estaba haciendo. */
 function autorizarGerente(motivo) {
   return new Promise((resolve) => {
     const entrada = el('input', {
-      type: 'password', inputmode: 'numeric', maxlength: 6, autocomplete: 'off', placeholder: '••••••',
+      type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
+      placeholder: '•'.repeat(LARGO_CODIGO),
     });
     const err = el('p', { clase: 'mensaje-error' });
-    const select = el('select', {}, estado.empleados.filter((e) => e.rol === 'gerente')
-      .map((g) => el('option', { value: g.id, texto: g.nombre })));
 
     abrirModal({
       titulo: 'Autorización de gerencia',
       subtitulo: motivo,
       contenido: el('div', {}, [
-        el('div', { clase: 'campo' }, [el('label', { texto: 'Gerente' }), select]),
-        el('div', { clase: 'campo' }, [el('label', { texto: 'PIN de 6 dígitos' }), entrada]),
+        el('div', { clase: 'campo' }, [
+          el('label', { texto: `Código de gerencia (${LARGO_CODIGO} dígitos)` }),
+          entrada,
+        ]),
         err,
       ]),
       botones: [
@@ -432,13 +361,12 @@ function autorizarGerente(motivo) {
           texto: 'Autorizar',
           clase: 'btn-primario',
           accion: async () => {
-            const g = await DB.obtener('empleados', select.value);
-            if (await verificarPin(entrada.value.trim(), g.pin)) {
-              cerrarModal();
-              resolve(g);
-            } else {
-              err.textContent = 'PIN incorrecto.';
-            }
+            const sal = await DB.leerConfig('sal_codigos', null);
+            const hash = await derivarCodigo(entrada.value.trim(), sal);
+            const gerente = estado.empleados.find(
+              (e) => e.rol === 'gerente' && e.codigo && igualesConstante(e.codigo, hash),
+            );
+            if (gerente) { cerrarModal(); resolve(gerente); } else err.textContent = 'Código incorrecto.';
           },
         },
       ],
@@ -451,32 +379,42 @@ function autorizarGerente(motivo) {
 /* Panel de salida                                                     */
 /* ------------------------------------------------------------------ */
 
-async function abrirPanel(empleado) {
-  // Sin restaurante no hay a quién cargarle la salida, y una salida sin destino
-  // rompe todo el sentido del registro. Se vuelve al principio, no se sigue.
-  if (!estado.restaurante || !estado.restaurante.id) {
-    await mostrarRestaurantes();
-    brindis({
-      texto: 'Empieza por tu restaurante',
-      sub: 'Se perdió la selección. Escoge de nuevo y vuelve a entrar.',
-      tipo: 'error',
-      segundos: 6,
-    });
-    return;
-  }
+async function abrirPanel(empleado, restaurante) {
   estado.empleado = empleado;
+  estado.restaurante = restaurante;
   estado.carrito.clear();
+  estado.busqueda = '';
   await cargarCache();
   estado.categoriaSel = estado.categorias.find(
     (c) => estado.productos.some((p) => p.categoriaId === c.id),
   )?.id || null;
 
-  $('#panel-titulo').textContent = estado.restaurante.nombre;
+  document.documentElement.style.setProperty('--acento', restaurante.color);
+  $('#panel-titulo').textContent = restaurante.nombre;
   $('#panel-sub').textContent = empleado.nombre;
-  $('#panel-punto').style.background = estado.restaurante.color;
-  $('#btn-salir').onclick = () => mostrarRestaurantes();
+  $('#panel-punto').style.background = restaurante.color;
+  $('#btn-salir').onclick = () => mostrarAcceso();
+  $('#btn-codigo').onclick = () => modalCambiarCodigo(empleado);
   $('#btn-confirmar').onclick = confirmarSalida;
   $('#btn-vaciar').onclick = () => { estado.carrito.clear(); pintarCarrito(); pintarProductos(); };
+
+  const buscador = $('#buscador');
+  buscador.value = '';
+  buscador.oninput = () => {
+    estado.busqueda = buscador.value.trim();
+    $('#buscador-limpiar').hidden = !estado.busqueda;
+    pintarCategorias();
+    pintarProductos();
+  };
+  $('#buscador-limpiar').hidden = true;
+  $('#buscador-limpiar').onclick = () => {
+    buscador.value = '';
+    estado.busqueda = '';
+    $('#buscador-limpiar').hidden = true;
+    buscador.blur();
+    pintarCategorias();
+    pintarProductos();
+  };
 
   pintarCategorias();
   pintarProductos();
@@ -485,22 +423,54 @@ async function abrirPanel(empleado) {
   iniciarSesion(INACTIVIDAD_EMPLEADO, '#sesion-aviso');
 }
 
+function buscando() { return estado.busqueda.length > 0; }
+
+function productosVisibles() {
+  if (!buscando()) return estado.productos.filter((p) => p.categoriaId === estado.categoriaSel);
+  const terminos = normalizar(estado.busqueda).split(/\s+/).filter(Boolean);
+  // Se busca también por categoría y por tamaño: "ron" trae toda la categoría y
+  // "caja" trae las cervezas, que es como la gente busca de verdad.
+  return estado.productos.filter((p) => {
+    const objetivo = normalizar(`${p.nombre} ${nombreCategoria(p.categoriaId)} ${p.tamano || ''}`);
+    return terminos.every((t) => objetivo.includes(t));
+  });
+}
+
+function nombreCategoria(id) {
+  return estado.categorias.find((c) => c.id === id)?.nombre || '';
+}
+
 function pintarCategorias() {
   const tiras = $('#tiras-categorias');
+  tiras.classList.toggle('apagadas', buscando());
   tiras.replaceChildren(...estado.categorias
     .filter((c) => estado.productos.some((p) => p.categoriaId === c.id))
     .map((c) => el('button', {
-      clase: `chip-categoria${c.id === estado.categoriaSel ? ' sel' : ''}`,
+      clase: `chip-categoria${!buscando() && c.id === estado.categoriaSel ? ' sel' : ''}`,
       estilo: { '--c': c.color },
-      onclick: () => { estado.categoriaSel = c.id; pintarCategorias(); pintarProductos(); },
+      onclick: () => {
+        estado.categoriaSel = c.id;
+        if (buscando()) {
+          estado.busqueda = '';
+          $('#buscador').value = '';
+          $('#buscador-limpiar').hidden = true;
+        }
+        pintarCategorias();
+        pintarProductos();
+      },
     }, [el('span', { clase: 'bolita' }), c.nombre])));
 }
 
 function pintarProductos() {
   const rejilla = $('#rejilla-productos');
-  const lista = estado.productos.filter((p) => p.categoriaId === estado.categoriaSel);
+  const lista = productosVisibles();
   if (!lista.length) {
-    rejilla.replaceChildren(el('p', { clase: 'vacio', texto: 'No hay productos en esta categoría.' }));
+    rejilla.replaceChildren(el('p', {
+      clase: 'vacio',
+      texto: buscando()
+        ? `No hay ningún licor que se llame "${estado.busqueda}". Revisa cómo se escribe o búscalo por categoría.`
+        : 'No hay productos en esta categoría.',
+    }));
     return;
   }
   rejilla.replaceChildren(...lista.map((p) => {
@@ -511,7 +481,10 @@ function pintarProductos() {
         clase: `tecla-producto estado-${e.clave}`,
         onclick: () => abrirSelectorCantidad(p),
       }, [
-        el('span', { clase: 'nom', texto: p.nombre }),
+        el('span', {}, [
+          buscando() ? el('span', { clase: 'cat', texto: nombreCategoria(p.categoriaId) }) : null,
+          el('span', { clase: 'nom', texto: p.nombre }),
+        ].filter(Boolean)),
         el('span', { clase: 'fila' }, [
           el('span', { clase: 'cant', texto: String(p.existencia) }),
           el('span', { clase: 'uni', texto: p.tamano || '' }),
@@ -521,6 +494,7 @@ function pintarProductos() {
       enCarrito ? el('span', { clase: 'en-carrito', texto: `+${enCarrito}` }) : null,
     ]);
   }));
+  rejilla.scrollTop = 0;
 }
 
 function abrirSelectorCantidad(producto) {
@@ -643,9 +617,9 @@ async function confirmarSalida() {
     });
 
     const total = lineas.reduce((s, l) => s + l.cantidad, 0);
-    // Se capturan ANTES de volver a la pantalla de restaurantes, que limpia la
-    // sesión. Si la reversión se registrara a nombre de "sistema", el reporte
-    // por empleado mostraría al empleado con botellas que en realidad devolvió.
+    // Se capturan ANTES de volver a la pantalla de acceso, que limpia la sesión.
+    // Si la reversión se registrara a nombre de "sistema", el reporte por
+    // empleado mostraría botellas que la persona en realidad devolvió.
     const idEmpleado = estado.empleado.id;
     const nombreEmpleado = estado.empleado.nombre;
     const nombreRest = estado.restaurante.nombre;
@@ -671,11 +645,80 @@ async function confirmarSalida() {
         },
       },
     });
-    mostrarRestaurantes();
+    mostrarAcceso();
   } catch (e) {
     brindis({ texto: 'No se registró la salida', sub: e.message, tipo: 'error', segundos: 8 });
     $('#btn-confirmar').disabled = false;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Cambio de código por el propio empleado                             */
+/* ------------------------------------------------------------------ */
+
+function modalCambiarCodigo(empleado) {
+  const actual = el('input', {
+    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
+    placeholder: '•'.repeat(LARGO_CODIGO),
+  });
+  const nuevo = el('input', {
+    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
+    placeholder: '•'.repeat(LARGO_CODIGO),
+  });
+  const repite = el('input', {
+    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
+    placeholder: '•'.repeat(LARGO_CODIGO),
+  });
+  const err = el('p', { clase: 'mensaje-error' });
+
+  abrirModal({
+    titulo: 'Cambiar mi código',
+    subtitulo: 'El gerente te asignó el primero. Cámbialo por uno que solo tú conozcas: '
+      + 'todo lo que saques queda a tu nombre.',
+    contenido: el('div', {}, [
+      el('div', { clase: 'campo' }, [el('label', { texto: 'Código actual' }), actual]),
+      el('div', { clase: 'campo' }, [el('label', { texto: `Código nuevo (${LARGO_CODIGO} dígitos)` }), nuevo]),
+      el('div', { clase: 'campo' }, [el('label', { texto: 'Repite el nuevo' }), repite]),
+      err,
+    ]),
+    botones: [
+      { texto: 'Cancelar', accion: cerrarModal },
+      {
+        texto: 'Guardar',
+        clase: 'btn-primario',
+        accion: async () => {
+          const patron = new RegExp(`^\\d{${LARGO_CODIGO}}$`);
+          if (!patron.test(nuevo.value.trim())) {
+            err.textContent = `El código nuevo debe tener ${LARGO_CODIGO} dígitos.`; return;
+          }
+          if (nuevo.value.trim() !== repite.value.trim()) {
+            err.textContent = 'Los dos códigos nuevos no coinciden.'; return;
+          }
+          if (codigoDebil(nuevo.value.trim())) {
+            err.textContent = 'Ese código es demasiado fácil de adivinar.'; return;
+          }
+          const sal = await DB.leerConfig('sal_codigos', null);
+          const hashActual = await derivarCodigo(actual.value.trim(), sal);
+          if (!igualesConstante(hashActual, empleado.codigo)) {
+            err.textContent = 'El código actual no es correcto.'; return;
+          }
+          const hashNuevo = await derivarCodigo(nuevo.value.trim(), sal);
+          const todos = await DB.todos('empleados');
+          if (todos.some((e) => e.id !== empleado.id && e.activo && e.codigo
+            && igualesConstante(e.codigo, hashNuevo))) {
+            err.textContent = 'Ese código ya lo tiene otra persona. Escoge otro.'; return;
+          }
+          const guardado = { ...empleado, codigo: hashNuevo };
+          await DB.guardar('empleados', guardado);
+          estado.empleado = guardado;
+          await cargarCache();
+          cerrarModal();
+          brindis({ texto: 'Código cambiado', sub: 'Ahora solo tú lo conoces.', tipo: 'exito', segundos: 6 });
+        },
+      },
+    ],
+  });
+  setTimeout(() => actual.focus(), 60);
 }
 
 /* ------------------------------------------------------------------ */
@@ -702,11 +745,8 @@ function pintarSesion() {
   const urgente = sesion.restan <= 15;
   caja.classList.toggle('urgente', urgente);
   const texto = caja.querySelector('#sesion-texto');
-  if (texto) {
-    texto.textContent = urgente ? `Cierra en ${sesion.restan}s` : 'Sesión activa';
-  } else {
-    caja.textContent = urgente ? `La sesión cierra en ${sesion.restan}s` : '';
-  }
+  if (texto) texto.textContent = urgente ? `Cierra en ${sesion.restan}s` : 'Sesión activa';
+  else caja.textContent = urgente ? `La sesión cierra en ${sesion.restan}s` : '';
   const barra = caja.querySelector('#sesion-barra');
   if (barra) barra.style.width = `${Math.max(0, (sesion.restan / sesion.total) * 100)}%`;
 }
@@ -728,11 +768,10 @@ function cerrarPorInactividad() {
   if (modalAbierto()) cerrarModal();
   salirAdmin();
   ocultarBrindis();
-  mostrarRestaurantes();
+  mostrarAcceso();
   brindis({
     texto: 'Sesión cerrada por inactividad',
     sub: nombre ? `Nadie más puede sacar botellas a nombre de ${nombre}.` : '',
-    tipo: '',
     segundos: 5,
   });
 }
@@ -745,29 +784,32 @@ function cerrarPorInactividad() {
 /* Navegación y arranque                                               */
 /* ------------------------------------------------------------------ */
 
-document.addEventListener('click', (ev) => {
-  const boton = ev.target.closest('[data-volver]');
-  if (!boton) return;
-  const destino = boton.dataset.volver;
-  if (destino === 'restaurantes') mostrarRestaurantes();
-  else if (destino === 'empleados' && estado.restaurante) mostrarEmpleados(estado.restaurante);
-  else mostrarRestaurantes();
-});
-
 $('#velo').addEventListener('click', (ev) => { if (ev.target.id === 'velo') cerrarModal(); });
-
-$('#admin-salir').onclick = () => { salirAdmin(); mostrarRestaurantes(); };
+$('#admin-salir').onclick = () => { salirAdmin(); mostrarAcceso(); };
 
 /* Un dedo apoyado en el vidrio no debe hacer zoom ni seleccionar texto. */
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
+/* El service worker es lo que hace que la app abra sin internet en el iPad,
+   pero en desarrollo sirve archivos viejos y hace perder horas persiguiendo
+   errores ya corregidos. En localhost no se registra, y si quedó uno de antes
+   se elimina. En el iPad, que corre por HTTPS, funciona igual que siempre. */
+const enDesarrollo = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* sin conexión al registrar */ });
-  });
+  if (enDesarrollo) {
+    navigator.serviceWorker.getRegistrations()
+      .then((rs) => Promise.all(rs.map((r) => r.unregister())))
+      .then(() => (window.caches ? caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))) : null))
+      .catch(() => { /* nada que limpiar */ });
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* sin conexión al registrar */ });
+    });
+  }
 }
 
 iniciar();
 
-export { estado, autorizarGerente, mostrarRestaurantes };
+export { estado, autorizarGerente, mostrarAcceso };

@@ -7,9 +7,8 @@
 2. **¿Quién lo usa?** El personal de cuatro restaurantes (La Madre, La O,
    La Grieta, El Más Allá) que baja al almacén central a buscar licor, y la
    gerencia que administra el catálogo, recibe la mercancía y saca reportes.
-3. **¿Primera cosa visible?** Un empleado escoge su restaurante, su nombre, entra
-   su PIN, toca tres botellas y confirma: el inventario baja y queda el registro.
-   Eso funciona hoy.
+3. **¿Primera cosa visible?** Un empleado entra un código de 5 dígitos, toca tres
+   botellas y confirma: el inventario baja y queda el registro. Eso funciona hoy.
 
 ## Modelo de datos (lo que hay que entender antes de tocar nada)
 
@@ -39,18 +38,44 @@ Si algún día alguien "optimiza" eso, el historial deja de servir como evidenci
 
 ```
 index.html          Todas las pantallas del empleado y el contenedor de admin
-pruebas.html        60 pruebas del modelo. Abrir en el navegador; no hay runner
+pruebas.html        92 pruebas. Abrir en el navegador; no hay runner
 css/estilos.css     Todo el estilo. Sin framework
 js/db.js            IndexedDB: esquema, transacciones, exportar e importar
-js/cripto.js        PBKDF2 para los PIN
+js/cripto.js        PBKDF2 para los códigos de acceso
 js/datos.js         Los 4 restaurantes, las categorías y el catálogo de ejemplo
 js/modelo.js        Reglas de negocio: movimientos, existencias, reportes
 js/ui.js            Pantallas, modal, avisos flotantes, formato, descargas
 js/app.js           Arranque, sesión, flujo del empleado
 js/admin.js         Área de gerencia
 sw.js               Service worker (red primero, respaldo en caché)
-herramientas/       Generador de iconos. Solo se corre si cambia el icono
+herramientas/       Servidor de desarrollo y generador de iconos
 ```
+
+## Acceso: por qué un solo código
+
+No se escoge restaurante ni nombre. Se entra un código de 5 dígitos y el sistema
+resuelve por él quién es la persona, a qué restaurante pertenece y si va al panel
+de salidas o al área de gerencia.
+
+Eso obliga a dos cosas que no son negociables:
+
+- **Los códigos son únicos en toda la instalación.** Se impone al crearlos y al
+  cambiarlos (`admin.js` y `modalCambiarCodigo`). Dos personas con el mismo
+  código harían que el sistema le cargue las botellas a la equivocada.
+- **La sal del cifrado es una sola para toda la instalación** (`config.sal_codigos`),
+  no una por empleado. Con sal por usuario habría que derivar el hash una vez por
+  cada persona para saber de quién es el código: con 30 empleados, más de segundo
+  y medio por entrada. El razonamiento completo y lo que se pierde con esa
+  decisión está escrito en la cabecera de `js/cripto.js`.
+
+Por 5 dígitos y no 4: con 4 hay 10.000 combinaciones y, con 30 empleados, un 4%
+de probabilidad de que dos escojan la misma. Con 5 baja a 0,4%. El largo está en
+`LARGO_CODIGO`, en `js/cripto.js`, y es lo único que hay que cambiar.
+
+El bloqueo por intentos fallidos es **del aparato**, no de una persona: hasta que
+el código no acierta no se sabe quién está intentando. Un código de gerencia
+entra durante el bloqueo y lo levanta — sin esa válvula, cinco dedazos dejan el
+almacén cerrado en pleno servicio y la gente saca botellas sin registrarlas.
 
 ## Comandos
 
@@ -58,11 +83,17 @@ Servidor local para desarrollo y pruebas (hace falta un contexto seguro:
 `localhost` cuenta, `file://` no):
 
 ```bash
-python3 -m http.server 8787 --directory /Users/kaioken/almacen-licores
+python3 herramientas/servidor-dev.py 8788
 ```
 
-- App: <http://localhost:8787/index.html>
-- Pruebas: <http://localhost:8787/pruebas.html> — deben decir "Ninguna falló"
+- App: <http://localhost:8788/index.html>
+- Pruebas: <http://localhost:8788/pruebas.html> — deben decir "Ninguna falló"
+
+Usa ese servidor y no `python3 -m http.server`: manda `Cache-Control: no-store`
+en todo. Sin eso el navegador sigue sirviendo los módulos viejos después de
+editar un archivo, y se pierden horas persiguiendo errores ya corregidos.
+Por la misma razón, `app.js` **no registra el service worker en localhost** y
+elimina el que hubiera quedado de antes.
 
 Regenerar iconos (solo si cambia el diseño del icono):
 
@@ -91,9 +122,18 @@ python3 herramientas/generar-iconos.py
 - **Red primero en el service worker.** Con caché primero, subir una corrección
   no la aplicaba: el iPad seguía abriendo la versión vieja. Pasó durante el
   desarrollo, y también contaminó la base de datos real con datos de prueba.
-- **PBKDF2 con 210.000 iteraciones.** Medido: 50 ms por verificación. Un PIN de
-  4 dígitos nunca es una contraseña fuerte; esto solo evita que aparezca legible
-  en la base o en un respaldo.
+- **PBKDF2 con 210.000 iteraciones.** Medido: 50 ms por derivación, que es lo que
+  tarda identificar a una persona por su código. Un código de 5 dígitos nunca es
+  una contraseña fuerte; esto solo evita que aparezca legible en la base o en un
+  respaldo.
+- **El gerente asigna el código y el empleado lo cambia.** Con un teclado único no
+  hay forma de que alguien sin código se identifique para crear el suyo. El
+  gerente lo asigna al registrar a la persona; el empleado lo cambia desde el
+  panel con "Cambiar mi código". Hasta que lo cambie, el gerente lo conoce — está
+  dicho en el manual, no escondido.
+- **Buscador que ignora acentos** (`normalizar` en `ui.js`): busca sobre nombre,
+  categoría y tamaño, porque "ron" debe traer la categoría completa y "caja" las
+  cervezas. Nadie va a escribir "Patrón" con tilde en un almacén.
 - **`--acento` es identidad, `--accion` es acción.** El color del restaurante
   pinta la barra y la insignia; el botón de confirmar es siempre verde. Si
   tomara el color del local, en La Grieta saldría rojo y se leería como borrar.

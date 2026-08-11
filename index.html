@@ -40,16 +40,16 @@
         </div>
         <div class="campo">
           <label for="cfg-nombre">Nombre del gerente</label>
-          <input id="cfg-nombre" type="text" autocomplete="off" autocapitalize="words" placeholder="Nombre y apellido">
+          <input id="cfg-nombre" type="text" autocomplete="off" autocapitalize="words" placeholder="Nombre y apellido" maxlength="50">
         </div>
         <div class="campo">
-          <label for="cfg-pin">PIN de gerencia (6 dígitos)</label>
-          <input id="cfg-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">
-          <p class="ayuda">Este PIN abre el área de administración: catálogo, entradas, ajustes, reportes y respaldos. No lo compartas con el personal de salón.</p>
+          <label for="cfg-pin">Código de gerencia (5 dígitos)</label>
+          <input id="cfg-pin" type="password" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="•••••">
+          <p class="ayuda">Con este código entras directo a Administración: catálogo, entradas, ajustes, reportes y respaldos. No lo compartas con el personal de salón.</p>
         </div>
         <div class="campo">
-          <label for="cfg-pin2">Repite el PIN</label>
-          <input id="cfg-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••">
+          <label for="cfg-pin2">Repite el código</label>
+          <input id="cfg-pin2" type="password" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="•••••">
         </div>
         <div class="campo">
           <label for="cfg-ejemplo">Catálogo inicial</label>
@@ -57,7 +57,7 @@
             <option value="si">Cargar catálogo de ejemplo (58 productos y 8 empleados de prueba)</option>
             <option value="no">Empezar vacío</option>
           </select>
-          <p class="ayuda">El catálogo de ejemplo se edita o se borra completo desde Administración. Los empleados de prueba no traen PIN: cada uno lo crea la primera vez que entra.</p>
+          <p class="ayuda">El catálogo de ejemplo se edita o se borra completo desde Administración. Los empleados de prueba traen códigos conocidos que se te muestran una vez.</p>
         </div>
         <p class="mensaje-error" id="cfg-error"></p>
         <button class="btn btn-primario btn-ancho" id="cfg-crear">Crear y empezar</button>
@@ -65,53 +65,22 @@
     </div>
   </section>
 
-  <!-- Restaurantes -->
-  <section class="pantalla" id="pantalla-restaurantes">
+  <!-- Acceso: un solo código identifica a la persona y su restaurante -->
+  <section class="pantalla" id="pantalla-acceso">
     <div class="cuerpo centrado">
-      <div class="marca">
-        <h2>Almacén de Licores</h2>
-        <p id="rest-sub">Selecciona tu restaurante</p>
+      <div class="pin-caja" id="acceso-caja">
+        <div class="marca">
+          <h2>Almacén de Licores</h2>
+          <p id="acceso-sub">Entra tu código</p>
+        </div>
+        <div class="pin-puntos" id="acceso-puntos"></div>
+        <div class="teclado" id="acceso-teclado"></div>
+        <p class="mensaje-error" id="acceso-error"></p>
       </div>
-      <div class="rejilla-restaurantes" id="rejilla-restaurantes"></div>
     </div>
     <div class="pie">
       <span class="crece" id="pie-info"></span>
-      <button class="btn btn-fantasma btn-chico" id="btn-admin">Administración</button>
-    </div>
-  </section>
-
-  <!-- Empleados -->
-  <section class="pantalla" id="pantalla-empleados">
-    <div class="barra">
-      <button class="btn btn-fantasma btn-chico" data-volver="restaurantes">Atrás</button>
-      <div class="identidad">
-        <span class="punto-rest" id="emp-punto"></span>
-        <div>
-          <h1 id="emp-titulo">Restaurante</h1>
-          <p class="sub">¿Quién eres?</p>
-        </div>
-      </div>
-      <span class="crece"></span>
-    </div>
-    <div class="cuerpo">
-      <div class="rejilla-empleados" id="rejilla-empleados"></div>
-    </div>
-  </section>
-
-  <!-- PIN -->
-  <section class="pantalla" id="pantalla-pin">
-    <div class="barra">
-      <button class="btn btn-fantasma btn-chico" id="pin-atras" data-volver="empleados">Atrás</button>
-      <span class="crece"></span>
-    </div>
-    <div class="cuerpo centrado">
-      <div class="pin-caja" id="pin-caja">
-        <h2 class="pin-titulo" id="pin-titulo">Entra tu PIN</h2>
-        <p class="pin-sub" id="pin-sub"></p>
-        <div class="pin-puntos" id="pin-puntos"></div>
-        <div class="teclado" id="pin-teclado"></div>
-        <p class="mensaje-error" id="pin-error"></p>
-      </div>
+      <span class="pie-nota">La gerencia entra con su propio código</span>
     </div>
   </section>
 
@@ -130,10 +99,16 @@
         <span id="sesion-texto"></span>
         <span class="barra-tiempo"><i id="sesion-barra"></i></span>
       </div>
+      <button class="btn btn-fantasma btn-chico" id="btn-codigo">Cambiar mi código</button>
       <button class="btn btn-fantasma btn-chico" id="btn-salir">Cerrar sesión</button>
     </div>
     <div class="panel-cuerpo">
       <div class="columna-productos">
+        <div class="barra-busqueda">
+          <input id="buscador" type="search" inputmode="search" autocomplete="off" autocorrect="off"
+                 autocapitalize="none" spellcheck="false" placeholder="Buscar un licor por nombre…">
+          <button class="btn btn-fantasma btn-chico" id="buscador-limpiar" hidden>Limpiar</button>
+        </div>
         <div class="tiras-categorias" id="tiras-categorias"></div>
         <div class="rejilla-productos" id="rejilla-productos"></div>
       </div>

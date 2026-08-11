@@ -5,7 +5,7 @@
    movimiento nuevo. */
 
 import { DB, nuevoId } from './db.js';
-import { cifrarPin } from './cripto.js';
+import { derivarCodigo, igualesConstante, codigoDebil, LARGO_CODIGO } from './cripto.js';
 import { productosIniciales, empleadosEjemplo } from './datos.js';
 import {
   estadoStock, registrarLote, revertirLote, productosActivos, listaCompra,
@@ -819,7 +819,7 @@ async function vistaEmpleados() {
       ]),
       el('button', { clase: 'btn btn-primario btn-chico', texto: 'Agregar gerente', onclick: () => modalEmpleado(null, null, 'gerente') }),
     ]) : null,
-    seccion('Gerencia', 'Acceso al área de administración con PIN de 6 dígitos.',
+    seccion('Gerencia', `Con su código entran directo a Administración. Mismo teclado que el personal, ${LARGO_CODIGO} dígitos.`,
       el('div', { clase: 'lista-simple' }, gerentes.map((g) => filaEmpleado(g, null))),
       el('button', {
         clase: 'btn btn-chico btn-fantasma',
@@ -832,7 +832,6 @@ async function vistaEmpleados() {
 }
 
 function filaEmpleado(e, restaurante) {
-  const sinPin = !e.pin;
   return el('div', { clase: 'item-lista' }, [
     el('div', { clase: 'crece' }, [
       el('div', { clase: 't', texto: e.nombre }),
@@ -840,7 +839,7 @@ function filaEmpleado(e, restaurante) {
         clase: 's',
         texto: [
           e.rol === 'gerente' ? 'Gerencia' : (restaurante ? restaurante.nombre : ''),
-          sinPin ? 'sin PIN: lo crea en su primer ingreso' : 'PIN activo',
+          e.codigo ? 'código asignado' : 'SIN CÓDIGO: no puede entrar',
           e.ejemplo ? 'de ejemplo' : '',
         ].filter(Boolean).join(' · '),
       }),
@@ -853,25 +852,33 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
   const restaurantes = await DB.todos('restaurantes');
   const esNuevo = !empleado;
   const rol = rolFijo || empleado?.rol || 'empleado';
-  const largoPin = rol === 'gerente' ? 6 : 4;
 
-  const nombre = el('input', { type: 'text', value: empleado?.nombre || '', autocapitalize: 'words', maxlength: String(LARGO.empleado) });
+  const nombre = el('input', {
+    type: 'text', value: empleado?.nombre || '', autocapitalize: 'words', maxlength: String(LARGO.empleado),
+  });
   const selRest = el('select', {}, restaurantes.sort((a, b) => a.orden - b.orden).map((r) => el('option', {
     value: r.id, texto: r.nombre, selected: r.id === (empleado?.restauranteId || restauranteId),
   })));
-  const pin = el('input', { type: 'password', inputmode: 'numeric', maxlength: String(largoPin), placeholder: '•'.repeat(largoPin) });
+  const codigo = el('input', {
+    type: 'text', inputmode: 'numeric', maxlength: String(LARGO_CODIGO),
+    autocomplete: 'off', placeholder: '0'.repeat(LARGO_CODIGO),
+    estilo: { fontSize: '24px', letterSpacing: '.16em', fontVariantNumeric: 'tabular-nums' },
+  });
   const err = el('p', { clase: 'mensaje-error' });
 
   abrirModal({
     titulo: esNuevo ? (rol === 'gerente' ? 'Nuevo gerente' : 'Nuevo empleado') : empleado.nombre,
-    subtitulo: rol === 'empleado' && esNuevo
-      ? 'Puedes dejar el PIN en blanco: la persona lo crea la primera vez que entra, contigo presente.'
-      : null,
+    subtitulo: esNuevo
+      ? 'El código es la llave y el nombre a la vez: con él, el sistema sabe quién es y de qué restaurante. '
+        + 'Anótalo y dáselo a la persona; después queda cifrado y no hay forma de volver a verlo.'
+      : 'Deja el código en blanco para no cambiarlo.',
     contenido: el('div', {}, [
       campo('Nombre completo', nombre),
       rol === 'empleado' ? campo('Restaurante', selRest) : null,
-      campo(esNuevo ? `PIN de ${largoPin} dígitos` : `Nuevo PIN de ${largoPin} dígitos`, pin,
-        esNuevo ? null : 'Déjalo en blanco para no cambiarlo.'),
+      campo(esNuevo ? `Código de ${LARGO_CODIGO} dígitos` : `Código nuevo de ${LARGO_CODIGO} dígitos`, codigo,
+        esNuevo
+          ? 'Se muestra a la vista para que lo anotes bien. No puede repetirse con el de otra persona.'
+          : 'Úsalo solo si la persona lo olvidó o si alguien más lo vio.'),
       err,
     ].filter(Boolean)),
     botones: [
@@ -883,7 +890,7 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
           cerrarModal();
           if (!await confirmar({
             titulo: 'Dar de baja',
-            mensaje: `${empleado.nombre} deja de aparecer en las pantallas. Todo lo que sacó se conserva en el historial.`,
+            mensaje: `${empleado.nombre} deja de poder entrar al sistema. Todo lo que sacó se conserva en el historial.`,
             textoSi: 'Dar de baja',
             peligro: true,
           })) return;
@@ -893,51 +900,58 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
           render();
         },
       } : null,
-      !esNuevo && empleado.pin ? {
-        texto: 'Borrar PIN',
-        accion: async () => {
-          await DB.guardar('empleados', { ...empleado, pin: null, intentosFallidos: 0, bloqueadoHasta: null });
-          await ctx.refrescarCache();
-          cerrarModal();
-          brindis({ texto: 'PIN borrado', sub: 'La persona crea uno nuevo en su próximo ingreso.', tipo: 'exito', segundos: 6 });
-          render();
-        },
-      } : null,
       {
         texto: 'Guardar',
         clase: 'btn-primario',
         accion: async () => {
           const n = nombre.value.trim();
-          const p = pin.value.trim();
+          const c = codigo.value.trim();
           if (n.length < 3) { err.textContent = 'Escribe el nombre completo.'; return; }
-          if (p && !new RegExp(`^\\d{${largoPin}}$`).test(p)) {
-            err.textContent = `El PIN debe tener exactamente ${largoPin} dígitos.`; return;
+          if (esNuevo && !c) { err.textContent = 'Sin código la persona no puede entrar al sistema.'; return; }
+          if (c && !new RegExp(`^\\d{${LARGO_CODIGO}}$`).test(c)) {
+            err.textContent = `El código debe tener exactamente ${LARGO_CODIGO} dígitos.`; return;
           }
-          if (p && (new RegExp(`^(\\d)\\1{${largoPin - 1}}$`).test(p) || p === '1234' || p === '123456')) {
-            err.textContent = 'Ese PIN es demasiado fácil de adivinar.'; return;
+          if (c && codigoDebil(c)) {
+            err.textContent = 'Ese código es demasiado fácil de adivinar. Escoge otro.'; return;
           }
-          if (esNuevo && rol === 'gerente' && !p) { err.textContent = 'Un gerente necesita PIN desde el principio.'; return; }
+
+          const sal = await DB.leerConfig('sal_codigos', null);
+          let hash = empleado?.codigo || null;
+          if (c) {
+            hash = await derivarCodigo(c, sal);
+            // Sin esta comprobación, dos personas con el mismo código harían que
+            // el sistema le cargue las botellas a la equivocada. Es la regla que
+            // sostiene todo el registro.
+            const todos = await DB.todos('empleados');
+            const choque = todos.find((e) => e.activo && e.id !== empleado?.id
+              && e.codigo && igualesConstante(e.codigo, hash));
+            if (choque) {
+              err.textContent = `Ese código ya lo tiene ${choque.nombre}. Escoge otro.`; return;
+            }
+          }
 
           const base = empleado || {
             id: nuevoId(rol === 'gerente' ? 'g' : 'e'),
             rol,
             activo: true,
             ejemplo: false,
-            intentosFallidos: 0,
-            bloqueadoHasta: null,
-            pin: null,
+            codigo: null,
             creado: new Date().toISOString(),
           };
-          const guardado = {
+          await DB.guardar('empleados', {
             ...base,
             nombre: n,
             restauranteId: rol === 'gerente' ? null : selRest.value,
-            pin: p ? await cifrarPin(p) : base.pin,
-          };
-          await DB.guardar('empleados', guardado);
+            codigo: hash,
+          });
           await ctx.refrescarCache();
           cerrarModal();
-          brindis({ texto: esNuevo ? 'Registrado' : 'Actualizado', tipo: 'exito' });
+          brindis({
+            texto: esNuevo ? `${n} registrado` : 'Actualizado',
+            sub: c ? `Su código es ${c}. Anótalo ahora: no se puede volver a ver.` : '',
+            tipo: 'exito',
+            segundos: c ? 12 : 4,
+          });
           render();
         },
       },
@@ -964,6 +978,32 @@ async function exportarRespaldo() {
   } catch (e) {
     brindis({ texto: 'No se pudo respaldar', sub: e.message, tipo: 'error', segundos: 8 });
   }
+}
+
+/* Los códigos se muestran una sola vez. Después quedan cifrados y no hay forma
+   de recuperarlos: solo reasignarlos. */
+function mostrarCodigos(empleados, omitidos = []) {
+  abrirModal({
+    titulo: 'Códigos de los empleados de prueba',
+    subtitulo: 'Anótalos ahora. No se pueden volver a ver.',
+    contenido: el('div', {}, [
+      el('div', { clase: 'lista-simple' }, empleados.map((emp) => el('div', { clase: 'item-lista' }, [
+        el('div', { clase: 'crece' }, [el('div', { clase: 't', texto: emp.nombre })]),
+        el('div', {
+          texto: emp.codigoVisible,
+          estilo: {
+            fontSize: '24px', fontWeight: '700', letterSpacing: '.14em', fontVariantNumeric: 'tabular-nums',
+          },
+        }),
+      ]))),
+      omitidos.length ? el('p', {
+        clase: 'ayuda',
+        texto: `No se crearon ${omitidos.join(', ')}: su código de ejemplo ya lo tiene alguien real.`,
+        estilo: { marginTop: '16px' },
+      }) : null,
+    ].filter(Boolean)),
+    botones: [{ texto: 'Ya los anoté', clase: 'btn-primario', accion: cerrarModal }],
+  });
 }
 
 async function vistaSistema() {
@@ -1069,11 +1109,27 @@ async function vistaSistema() {
             mensaje: 'Se agregan al catálogo los productos y empleados de prueba. No se toca nada de lo que ya existe.',
             textoSi: 'Cargar',
           })) return;
+          const sal = await DB.leerConfig('sal_codigos', null);
+          const ejemplos = empleadosEjemplo();
+          const yaUsados = (await DB.todos('empleados')).filter((e) => e.activo && e.codigo);
+          const aGuardar = [];
+          const omitidos = [];
+          for (const emp of ejemplos) {
+            const hash = await derivarCodigo(emp.codigoVisible, sal);
+            // Si un código de ejemplo choca con uno real ya en uso, se omite:
+            // duplicar un código rompería la atribución de las salidas.
+            if (yaUsados.some((e) => igualesConstante(e.codigo, hash))) {
+              omitidos.push(emp.nombre);
+              continue;
+            }
+            const { codigoVisible, ...resto } = emp;
+            aGuardar.push({ ...resto, codigo: hash });
+          }
           await DB.guardarVarios('productos', productosIniciales());
-          await DB.guardarVarios('empleados', empleadosEjemplo());
+          if (aGuardar.length) await DB.guardarVarios('empleados', aGuardar);
           await ctx.refrescarCache();
-          brindis({ texto: 'Ejemplos cargados', tipo: 'exito' });
           render();
+          mostrarCodigos(ejemplos.filter((e) => !omitidos.includes(e.nombre)), omitidos);
         },
       })),
   ].filter(Boolean));
