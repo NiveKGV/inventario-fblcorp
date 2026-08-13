@@ -101,6 +101,37 @@ Regenerar iconos (solo si cambia el diseño del icono):
 python3 herramientas/generar-iconos.py
 ```
 
+## Publicación
+
+La app está publicada en <https://nivekgv.github.io/inventario-fblcorp/>
+(GitHub Pages, rama `main`, raíz del repo). El iPad la instala desde ahí.
+
+Existe porque **Web Crypto y el service worker solo funcionan en contexto
+seguro**: HTTPS o `localhost`. Servir el proyecto desde la red local por
+`http://192.168.x.x` carga la pantalla pero deja los códigos de acceso muertos.
+
+Para publicar una corrección:
+
+```bash
+git push
+```
+
+Sube el número de `VERSION` en `sw.js` en el mismo commit. El service worker es
+red primero, así que el iPad toma la versión nueva al abrir con conexión, pero
+el cambio de versión es lo que descarta el caché viejo.
+
+Detalles que sostienen esta publicación y no hay que romper:
+
+- **Todas las rutas son relativas** (`./index.html`, `sw.js`, `js/app.js`).
+  Pages sirve desde un subdirectorio, no desde la raíz del dominio: una sola
+  ruta absoluta rompe el sitio entero.
+- **`.nojekyll`** evita que Pages procese el repo como un blog de Jekyll.
+- **`noindex` en `index.html` y `robots.txt`** — el repo es público, pero el
+  sitio no tiene por qué salir en buscadores.
+- **Los códigos de los empleados de ejemplo están en texto claro** en
+  `datos.js`. Es data de demostración y el repo es público: en una instalación
+  real hay que borrar esos empleados o cambiarles el código.
+
 ## Decisiones y sus porqués
 
 - **JavaScript nativo, cero dependencias, sin compilación.** El cliente no tiene
