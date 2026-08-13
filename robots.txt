@@ -1,0 +1,6 @@
+# No indexar. Esta app se publica en una URL fija para poder instalarla en el
+# iPad, pero no es un sitio público: lleva nombres de restaurantes reales y no
+# tiene por qué aparecer en buscadores.
+
+User-agent: *
+Disallow: /
