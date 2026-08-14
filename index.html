@@ -5,13 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Almacén">
+<!-- "black", no "black-translucent": con translucent el contenido pasa POR DEBAJO
+     de la barra de estado de iOS y el reloj y la batería del iPad quedan
+     flotando encima de la app. Con "black" iOS reserva esa franja y le pone el
+     fondo oscuro, así se lee como parte de la aplicación. El reloj propio de la
+     app está en la barra superior de cada pantalla. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Inventario">
 <meta name="theme-color" content="#121317">
 <meta name="color-scheme" content="dark">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
-<title>Almacén de Licores</title>
+<title>Inventario</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="iconos/icono-180.png">
 <link rel="icon" href="iconos/icono-192.png">
@@ -25,7 +30,7 @@
   <section class="pantalla activa" id="pantalla-carga">
     <div class="cuerpo centrado">
       <div class="marca">
-        <h2>Almacén de Licores</h2>
+        <h2>Inventario</h2>
         <p id="carga-texto">Abriendo la base de datos…</p>
       </div>
     </div>
@@ -71,7 +76,7 @@
     <div class="cuerpo centrado">
       <div class="pin-caja" id="acceso-caja">
         <div class="marca">
-          <h2>Almacén de Licores</h2>
+          <h2>Inventario</h2>
           <p id="acceso-sub">Entra tu código</p>
         </div>
         <div class="pin-puntos" id="acceso-puntos"></div>
@@ -80,6 +85,7 @@
       </div>
     </div>
     <div class="pie">
+      <span class="reloj" id="reloj-acceso"></span>
       <span class="crece" id="pie-info"></span>
       <span class="pie-nota">La gerencia entra con su propio código</span>
     </div>
@@ -96,6 +102,7 @@
         </div>
       </div>
       <span class="crece"></span>
+      <span class="reloj" id="reloj-panel"></span>
       <div class="sesion-aviso" id="sesion-aviso">
         <span id="sesion-texto"></span>
         <span class="barra-tiempo"><i id="sesion-barra"></i></span>
@@ -134,6 +141,7 @@
         <p class="sub" id="admin-sub"></p>
       </div>
       <span class="crece"></span>
+      <span class="reloj" id="reloj-admin"></span>
       <div class="sesion-aviso" id="admin-sesion"></div>
     </div>
     <div class="admin-tabs" id="admin-tabs"></div>

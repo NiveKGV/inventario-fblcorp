@@ -144,26 +144,117 @@ async function bandaRespaldo() {
 /* Resumen                                                             */
 /* ------------------------------------------------------------------ */
 
+/* Abre el detrás de una tarjeta del resumen. Existe porque un número suelto
+   ("3 agotados") obliga a irse a otra pestaña a averiguar cuáles son; el gerente
+   está parado frente al almacén y necesita el nombre, no la cuenta. */
+function modalProductos(titulo, subtitulo, lista, { conOrden = false } = {}) {
+  const contenido = lista.length
+    ? tabla(
+      [
+        'Producto',
+        { t: 'Quedan', num: true },
+        { t: 'Par', num: true },
+        ...(conOrden ? [{ t: 'Ordenar', num: true }] : []),
+        'Estado',
+      ],
+      lista.map((p) => el('tr', {}, [
+        el('td', {}, [
+          el('div', { texto: p.nombre }),
+          p.tamano ? el('div', { clase: 'desc', estilo: { margin: '0' }, texto: p.tamano }) : null,
+        ].filter(Boolean)),
+        el('td', { clase: 'num', texto: String(p.existencia) }),
+        el('td', { clase: 'num', texto: String(p.par) }),
+        ...(conOrden ? [el('td', { clase: 'num', texto: String(Math.max(0, p.par - p.existencia)) })] : []),
+        el('td', {}, [etiquetaEstado(estadoStock(p))]),
+      ])),
+    )
+    : el('p', { clase: 'vacio', texto: 'No hay productos en esta condición ahora mismo.' });
+
+  abrirModal({
+    titulo,
+    subtitulo,
+    contenido,
+    ancho: true,
+    botones: [{ texto: 'Cerrar', accion: cerrarModal }],
+  });
+}
+
+/* Lo que salió hoy, sumado por producto. Se usa -delta y no el conteo de
+   movimientos para que una devolución del mismo día se reste sola, igual que en
+   los reportes. Por eso puede haber un producto en 0: salió y volvió. */
+function modalSalidasHoy(movsHoy) {
+  const porProducto = new Map();
+  for (const m of movsHoy.filter((mv) => mv.restauranteId)) {
+    porProducto.set(m.productoNombre, (porProducto.get(m.productoNombre) || 0) + (-m.delta));
+  }
+  const filas = [...porProducto.entries()]
+    .filter(([, n]) => n !== 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'));
+
+  abrirModal({
+    titulo: 'Salió hoy del almacén',
+    subtitulo: `${numero(filas.reduce((s, [, n]) => s + n, 0))} botellas en total, del día operativo de hoy.`,
+    ancho: true,
+    contenido: filas.length
+      ? tabla(['Producto', { t: 'Botellas', num: true }],
+        filas.map(([nombre, n]) => el('tr', {}, [
+          el('td', { texto: nombre }),
+          el('td', { clase: 'num', texto: String(n) }),
+        ])))
+      : el('p', { clase: 'vacio', texto: 'Todavía no ha salido nada hoy.' }),
+    botones: [{ texto: 'Cerrar', accion: cerrarModal }],
+  });
+}
+
 async function vistaResumen() {
-  const [alertas, compra] = await Promise.all([resumenAlertas(), listaCompra()]);
+  const [alertas, compra, productos] = await Promise.all([
+    resumenAlertas(), listaCompra(), productosActivos(),
+  ]);
   const hoy = fechaPR();
   const movsHoy = await movimientosPeriodo(hoy, hoy);
   const salidasHoy = movsHoy.filter((m) => m.restauranteId).reduce((s, m) => s + (-m.delta), 0);
 
-  const dato = (valor, etiqueta, clase = '') => el('div', { clase: `tarjeta-dato ${clase}` }, [
-    el('div', { clase: 'v', texto: valor }),
-    el('div', { clase: 'e', texto: etiqueta }),
-  ]);
+  const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
+  const enEstado = (clave) => productos.filter((p) => estadoStock(p).clave === clave).sort(porNombre);
+
+  /* Una tarjeta con acción es un botón de verdad, no un div con onclick: en el
+     iPad eso es lo que le da el toque resaltado y lo hace alcanzable con teclado. */
+  const dato = (valor, etiqueta, clase = '', alTocar = null) => el(
+    alTocar ? 'button' : 'div',
+    {
+      clase: `tarjeta-dato ${clase} ${alTocar ? 'tocable' : ''}`,
+      ...(alTocar ? { type: 'button', onclick: alTocar, title: `Ver ${etiqueta}` } : {}),
+    },
+    [
+      el('div', { clase: 'v', texto: valor }),
+      el('div', { clase: 'e', texto: etiqueta }),
+    ],
+  );
 
   return el('div', {}, [
     await bandaRespaldo(),
     el('div', { clase: 'tarjetas-resumen' }, [
-      dato(numero(alertas.total), 'productos en catálogo'),
-      dato(numero(alertas.agotados), 'agotados', alertas.agotados ? 'alerta' : ''),
-      dato(numero(alertas.criticos), 'hay que ordenar', alertas.criticos ? 'alerta' : ''),
-      dato(numero(alertas.bajos), 'bajo el par', alertas.bajos ? 'aviso' : ''),
-      dato(numero(salidasHoy), 'botellas salieron hoy'),
-      dato(dinero(alertas.valorInventario), 'valor del inventario'),
+      dato(numero(alertas.total), 'productos en catálogo', '', () => modalProductos(
+        'Catálogo completo', `${alertas.total} productos activos.`,
+        [...productos].sort(porNombre),
+      )),
+      dato(numero(alertas.agotados), 'agotados', alertas.agotados ? 'alerta' : '', () => modalProductos(
+        'Agotados', 'No queda ni una unidad en el almacén.',
+        enEstado('agotado'), { conOrden: true },
+      )),
+      dato(numero(alertas.criticos), 'hay que ordenar', alertas.criticos ? 'alerta' : '', () => modalProductos(
+        'Hay que ordenar', 'Llegaron al punto de reorden. Piden ya.',
+        enEstado('critico'), { conOrden: true },
+      )),
+      dato(numero(alertas.bajos), 'bajo el par', alertas.bajos ? 'aviso' : '', () => modalProductos(
+        'Bajo el par', 'Todavía alcanzan, pero están por debajo de lo que debería haber.',
+        enEstado('bajo'), { conOrden: true },
+      )),
+      dato(numero(salidasHoy), 'botellas salieron hoy', '', () => modalSalidasHoy(movsHoy)),
+      dato(dinero(alertas.valorInventario), 'valor del inventario', '', () => modalProductos(
+        'Valor del inventario', `${dinero(alertas.valorInventario)} a costo, de mayor a menor.`,
+        [...productos].sort((a, b) => (b.existencia * (b.costo || 0)) - (a.existencia * (a.costo || 0))),
+      )),
     ]),
     seccion('Acciones rápidas', null, el('div', { estilo: { display: 'flex', gap: '12px', flexWrap: 'wrap' } }, [
       el('button', { clase: 'btn btn-primario', texto: 'Recibir orden', onclick: () => { tabActual = 'compra'; pintarTabs(); render(); } }),
@@ -723,9 +814,32 @@ async function vistaHistorial() {
   ]);
   const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
 
+  /* Los movimientos vienen ya ordenados de más nuevo a más viejo, y Map
+     conserva el orden de inserción: agrupar no altera el orden de la lista. */
+  const lotes = new Map();
+  for (const m of movs) {
+    let g = lotes.get(m.loteId);
+    if (!g) {
+      g = {
+        loteId: m.loteId,
+        fechaISO: m.fechaISO,
+        tipo: m.tipo,
+        empleadoNombre: m.empleadoNombre,
+        restauranteId: m.restauranteId,
+        motivo: m.motivo,
+        autorizadoPor: m.autorizadoPor,
+        lineas: [],
+      };
+      lotes.set(m.loteId, g);
+    }
+    g.lineas.push(m);
+  }
+  const grupos = [...lotes.values()];
+
   return el('div', {}, [
     seccion('Historial de movimientos',
-      'Registro completo y sin borrar. Una corrección no elimina nada: suma una reversión que también queda aquí.',
+      'Cada fila es una operación completa: quién, cuándo y para qué restaurante. Tócala para ver qué se llevó. '
+      + 'Registro sin borrar: una corrección no elimina nada, suma una reversión que también queda aquí.',
       el('div', { clase: 'seccion-barra' }, [
         ...PRESETS.map(([clave, etiqueta]) => el('button', {
           clase: 'btn btn-chico btn-fantasma',
@@ -739,42 +853,81 @@ async function vistaHistorial() {
           onclick: () => exportarMovimientos(movs, nombreRest),
         }),
       ]),
-      movs.length
-        ? tabla(['Fecha y hora', 'Tipo', 'Producto', { t: 'Cambio', num: true }, 'Restaurante', 'Quién', 'Motivo', ''],
-          movs.slice(0, 400).map((m) => el('tr', {}, [
-            el('td', { texto: fechaHoraPR(m.fechaISO) }),
-            el('td', {}, [el('span', {
-              clase: `etiqueta ${m.tipo === 'salida' ? 'critico' : (m.tipo === 'reversion' ? 'agotado' : 'ok')}`,
-              texto: TIPOS[m.tipo]?.etiqueta || m.tipo,
-            })]),
-            el('td', { texto: m.productoNombre }),
-            el('td', { clase: 'num', texto: m.delta > 0 ? `+${m.delta}` : String(m.delta) }),
-            el('td', { texto: m.restauranteId ? nombreRest(m.restauranteId) : '—' }),
-            el('td', { texto: m.empleadoNombre }),
-            el('td', { texto: [m.motivo, m.autorizadoPor ? `Autorizó ${m.autorizadoPor}` : ''].filter(Boolean).join(' · ') || '—' }),
-            el('td', { clase: 'num' }, [
-              m.tipo === 'reversion' ? null : el('button', {
-                clase: 'btn btn-chico btn-fantasma',
-                texto: 'Revertir',
-                onclick: () => revertir(m),
-              }),
-            ].filter(Boolean)),
-          ])))
+      grupos.length
+        ? tabla(['Fecha y hora', 'Tipo', 'Quién', 'Restaurante', 'Se llevó', 'Motivo', ''],
+          grupos.slice(0, 300).flatMap((g) => filaLote(g, nombreRest)))
         : el('p', { clase: 'vacio', texto: 'No hay movimientos en este período.' })),
   ]);
 }
 
-async function revertir(mov) {
+/* Una operación = una fila, no una fila por botella.
+
+   Antes se listaba movimiento por movimiento, y quien sacaba seis licores
+   ocupaba seis renglones idénticos salvo el nombre del producto. Peor: el botón
+   "Revertir" de cada renglón llamaba a revertirLote(), o sea que deshacía la
+   salida entera y no esa línea. La fila agrupada dice la verdad sobre lo que
+   hace ese botón. Al tocarla se abre el desglose. */
+function filaLote(g, nombreRest) {
+  const botellas = g.lineas.reduce((s, m) => s + Math.abs(m.delta), 0);
+  const detalle = el('tr', { clase: 'fila-detalle', hidden: true }, [
+    el('td', { colspan: '7' }, [
+      el('div', { clase: 'desglose' }, [
+        tabla(['Producto', { t: 'Cambio', num: true }],
+          g.lineas.map((m) => el('tr', {}, [
+            el('td', { texto: m.productoNombre }),
+            el('td', { clase: 'num', texto: m.delta > 0 ? `+${m.delta}` : String(m.delta) }),
+          ]))),
+      ]),
+    ]),
+  ]);
+
+  const fila = el('tr', {
+    clase: 'fila-lote',
+    onclick: () => {
+      detalle.hidden = !detalle.hidden;
+      fila.classList.toggle('abierta', !detalle.hidden);
+    },
+  }, [
+    el('td', { texto: fechaHoraPR(g.fechaISO) }),
+    el('td', {}, [el('span', {
+      clase: `etiqueta ${g.tipo === 'salida' ? 'critico' : (g.tipo === 'reversion' ? 'agotado' : 'ok')}`,
+      texto: TIPOS[g.tipo]?.etiqueta || g.tipo,
+    })]),
+    el('td', { texto: g.empleadoNombre }),
+    el('td', { texto: g.restauranteId ? nombreRest(g.restauranteId) : '—' }),
+    el('td', {}, [
+      el('span', { clase: 'resumen-lote', texto: `${botellas} ${botellas === 1 ? 'botella' : 'botellas'}` }),
+      el('span', {
+        clase: 'desc',
+        estilo: { margin: '0' },
+        texto: `${g.lineas.length} ${g.lineas.length === 1 ? 'producto' : 'productos'} · tocar para ver`,
+      }),
+    ]),
+    el('td', { texto: [g.motivo, g.autorizadoPor ? `Autorizó ${g.autorizadoPor}` : ''].filter(Boolean).join(' · ') || '—' }),
+    el('td', { clase: 'num' }, [
+      g.tipo === 'reversion' ? null : el('button', {
+        clase: 'btn btn-chico btn-fantasma',
+        texto: 'Revertir',
+        onclick: (ev) => { ev.stopPropagation(); revertir(g); },
+      }),
+    ].filter(Boolean)),
+  ]);
+
+  return [fila, detalle];
+}
+
+async function revertir(g) {
+  const cuantos = `${g.lineas.length} ${g.lineas.length === 1 ? 'producto' : 'productos'}`;
   if (!await confirmar({
-    titulo: 'Revertir movimiento',
-    mensaje: `Se va a deshacer el movimiento completo de ${fechaHoraPR(mov.fechaISO)} `
-      + `(${TIPOS[mov.tipo]?.etiqueta}, ${mov.productoNombre}). No se borra nada: `
-      + 'se registra una reversión a tu nombre y el original queda visible en el historial.',
+    titulo: 'Revertir la operación completa',
+    mensaje: `Se va a deshacer la ${TIPOS[g.tipo]?.etiqueta.toLowerCase()} de ${fechaHoraPR(g.fechaISO)} `
+      + `a nombre de ${g.empleadoNombre}, con ${cuantos}. Se deshace entera, no por producto. `
+      + 'No se borra nada: se registra una reversión a tu nombre y el original queda visible en el historial.',
     textoSi: 'Revertir',
     peligro: true,
   })) return;
   try {
-    await revertirLote(mov.loteId, {
+    await revertirLote(g.loteId, {
       empleadoId: ctx.gerente.id,
       empleadoNombre: ctx.gerente.nombre,
       motivo: 'Reversión desde administración',

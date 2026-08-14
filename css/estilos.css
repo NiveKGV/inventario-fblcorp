@@ -68,7 +68,9 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 22px;
+  /* El padding de arriba respeta el área segura de iOS. Sin esto, en un iPad
+     con esquinas redondeadas la barra queda pegada al borde físico. */
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 22px 14px;
   background: var(--fondo-2);
   border-bottom: 1px solid var(--borde);
   flex: 0 0 auto;
@@ -79,12 +81,24 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .barra .sub { font-size: 14px; color: var(--texto-2); margin: 0; }
 .barra .crece { flex: 1; }
 
+/* El reloj de la app. Existe porque la barra de estado del iPad queda fuera del
+   área de la aplicación: el empleado necesita ver la hora sin salirse, y tiene
+   que leerse como parte del sistema, no como el reloj de iOS encima. */
+.reloj {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--texto-2);
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+
 .cuerpo { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 22px; min-height: 0; }
 .cuerpo.centrado { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
 .pie {
   flex: 0 0 auto;
-  padding: 14px 22px;
+  padding: 14px 22px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--fondo-2);
   border-top: 1px solid var(--borde);
   display: flex;
@@ -444,6 +458,30 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .tarjeta-dato.alerta .v { color: var(--critico); }
 .tarjeta-dato.aviso .v { color: var(--bajo); }
 
+/* Las tarjetas que abren detalle son <button>. Hay que devolverles la
+   apariencia de tarjeta, que el navegador les quita, y dejar claro al tocarlas
+   que hay algo detrás: sin señal visible, nadie descubre que se pueden tocar. */
+.tarjeta-dato.tocable {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color .12s ease, transform .12s ease;
+}
+.tarjeta-dato.tocable::after {
+  content: 'Ver detalle';
+  display: block;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--texto-3);
+  margin-top: 8px;
+}
+.tarjeta-dato.tocable:hover { border-color: var(--texto-3); }
+.tarjeta-dato.tocable:active { transform: scale(.985); border-color: var(--acento); }
+.tarjeta-dato.tocable:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
 .seccion { margin-bottom: 30px; }
 .seccion h2 { font-size: 18px; margin: 0 0 4px; font-weight: 650; }
 .seccion .desc { font-size: 14px; color: var(--texto-2); margin: 0 0 14px; }
@@ -455,6 +493,27 @@ th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--bo
 th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-3); font-weight: 650; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:active { background: var(--panel); }
+
+/* --- Historial agrupado por operación --- */
+
+.fila-lote { cursor: pointer; }
+.fila-lote:hover { background: var(--panel); }
+.fila-lote.abierta { background: var(--panel); }
+.fila-lote.abierta td { border-bottom-color: transparent; }
+.fila-lote .resumen-lote { display: block; font-weight: 650; }
+.fila-lote .desc { font-size: 12px; }
+
+.fila-detalle > td { padding: 0 12px 14px; background: var(--panel); }
+.fila-detalle .desglose {
+  border-left: 3px solid var(--acento);
+  padding-left: 14px;
+}
+/* La tabla interna no repite el peso visual de la de afuera: es un desglose,
+   no una segunda tabla que compita con ella. */
+.fila-detalle .desglose table { font-size: 14px; }
+.fila-detalle .desglose th { font-size: 11px; }
+.fila-detalle .desglose td, .fila-detalle .desglose th { padding: 7px 10px; }
+.fila-detalle .desglose tbody tr:last-child td { border-bottom: none; }
 .tabla-envoltura { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--r); overflow: hidden; }
 .tabla-envoltura table tbody tr:last-child td { border-bottom: 0; }
 

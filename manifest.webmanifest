@@ -1,6 +1,6 @@
 {
-  "name": "Almacén de Licores",
-  "short_name": "Almacén",
+  "name": "Inventario",
+  "short_name": "Inventario",
   "description": "Control del almacén central de licores de La Madre, La O, La Grieta y El Más Allá.",
   "lang": "es-PR",
   "start_url": "./index.html",
@@ -10,7 +10,17 @@
   "background_color": "#121317",
   "theme_color": "#121317",
   "icons": [
-    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {
+      "src": "iconos/icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "iconos/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

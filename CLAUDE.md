@@ -162,6 +162,25 @@ Detalles que sostienen esta publicación y no hay que romper:
   gerente lo asigna al registrar a la persona; el empleado lo cambia desde el
   panel con "Cambiar mi código". Hasta que lo cambie, el gerente lo conoce — está
   dicho en el manual, no escondido.
+- **La app se llama "Inventario", no "Almacén".** El nombre del icono está en
+  `apple-mobile-web-app-title` y en `name`/`short_name` del manifiesto: los tres
+  tienen que decir lo mismo o el iPad muestra un nombre y la app otro.
+- **Barra de estado `black`, no `black-translucent`.** Con translucent el
+  contenido pasa por debajo de la barra de iOS y el reloj y la batería del iPad
+  quedan flotando sobre la app. Con `black` iOS reserva esa franja. Las barras
+  llevan además `env(safe-area-inset-*)` para no pegarse al borde físico.
+- **Reloj propio en la barra** (`pintarRelojes` en `app.js`): como la hora de
+  iOS queda fuera del área de la app, el empleado no la vería. Se pinta en hora
+  de Puerto Rico, la misma que se guarda en el historial, para que no haya dos
+  horas distintas en pantalla si el iPad quedara en otra zona.
+- **El historial agrupa por lote, no por línea.** Una salida de seis licores es
+  una fila que se abre, no seis renglones. Además el botón "Revertir" siempre
+  llamó a `revertirLote()`, o sea que deshacía la operación entera: la fila por
+  línea mentía sobre lo que hacía ese botón. El CSV sí se exporta línea por
+  línea, que es como sirve en Excel.
+- **Las tarjetas del resumen abren el detalle.** Un número suelto ("3 agotados")
+  obliga a irse a otra pestaña a averiguar cuáles son. Son `<button>` de verdad,
+  no `div` con `onclick`, para que el iPad les dé el resaltado al tocar.
 - **Buscador que ignora acentos** (`normalizar` en `ui.js`): busca sobre nombre,
   categoría y tamaño, porque "ron" debe traer la categoría completa y "caja" las
   cervezas. Nadie va a escribir "Patrón" con tilde en un almacén.

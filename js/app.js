@@ -15,7 +15,7 @@ import {
 } from './cripto.js';
 import { RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo } from './datos.js';
 import {
-  estadoStock, registrarLote, revertirLote, productosActivos, resumenAlertas, fechaHoraPR,
+  estadoStock, registrarLote, revertirLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
@@ -779,6 +779,29 @@ function cerrarPorInactividad() {
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => {
   document.addEventListener(ev, reiniciarSesion, { passive: true, capture: true });
 });
+
+/* ------------------------------------------------------------------ */
+/* Reloj de la aplicación                                              */
+/* ------------------------------------------------------------------ */
+
+/* La barra de estado de iOS queda fuera del área de la app, así que la hora del
+   iPad no se ve mientras se trabaja. Este reloj la pone dentro, en hora de
+   Puerto Rico igual que el resto del sistema: si el iPad quedara en otra zona,
+   la hora en pantalla seguiría cuadrando con la que se guarda en el historial.
+
+   Se refresca cada 10 s y no cada minuto para que al cambiar de minuto no se
+   quede hasta 59 s desfasado, que es justo lo que alguien nota. */
+function pintarRelojes() {
+  const ahora = horaPR(new Date());
+  for (const id of ['reloj-acceso', 'reloj-panel', 'reloj-admin']) {
+    const nodo = document.getElementById(id);
+    if (nodo) nodo.textContent = ahora;
+  }
+}
+
+pintarRelojes();
+setInterval(pintarRelojes, 10000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pintarRelojes(); });
 
 /* ------------------------------------------------------------------ */
 /* Navegación y arranque                                               */

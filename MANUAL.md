@@ -1,6 +1,7 @@
-# Manual de uso — Almacén de Licores
+# Manual de uso — Inventario
 
 Guía para operar el sistema. No hace falta saber nada de computadoras.
+En la pantalla de inicio del iPad la app aparece como **Inventario**.
 
 ---
 
@@ -139,7 +140,14 @@ Para recuperar todo en un iPad nuevo: **Sistema → Restaurar un respaldo**.
 
 Todo se puede exportar a Excel con **Exportar CSV**.
 
-**Administración → Historial** muestra movimiento por movimiento, sin filtrar.
+**Administración → Historial** muestra **una fila por operación**: quién, cuándo
+y para qué restaurante. Tocando la fila se abre el desglose de lo que se llevó.
+El botón **Revertir** deshace la operación completa, no un producto suelto — por
+eso está en la fila y no en cada renglón.
+
+En **Resumen**, las tarjetas de arriba (agotados, hay que ordenar, bajo el par,
+lo que salió hoy, valor del inventario) **se tocan** y muestran exactamente
+cuáles son esos productos, sin tener que irse a otra pestaña.
 
 ---
 
