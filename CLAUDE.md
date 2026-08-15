@@ -182,6 +182,13 @@ Detalles que sostienen esta publicación y no hay que romper:
 - **Las tarjetas del resumen abren el detalle.** Un número suelto ("3 agotados")
   obliga a irse a otra pestaña a averiguar cuáles son. Son `<button>` de verdad,
   no `div` con `onclick`, para que el iPad les dé el resaltado al tocar.
+- **La recepción no se limita a lo que está bajo el par.** `vistaCompra` se
+  construía solo desde `listaCompra()`, así que un producto que llegara sin
+  estar bajo su nivel no aparecía y no había forma de recibirlo — la salida era
+  meterlo por conteo físico, y el historial decía "ajuste" en vez de "llegó
+  mercancía". Con el inventario entero en nivel, la pantalla ni siquiera se
+  dibujaba. Ahora la lista de compra es la sugerencia y el buscador deja añadir
+  cualquier producto activo a la recepción.
 - **La importación de catálogo nunca borra y nunca pisa existencias.** Crea los
   productos que faltan y actualiza los que están, emparejando por nombre
   normalizado. La existencia solo se fija al **crear**: si se pisara, reimportar

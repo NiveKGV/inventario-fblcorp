@@ -14,7 +14,7 @@ import {
 } from './modelo.js';
 import {
   $, el, mostrarPantalla, abrirModal, cerrarModal, confirmar,
-  brindis, dinero, numero, descargar, aCSV,
+  brindis, dinero, numero, descargar, aCSV, normalizar,
 } from './ui.js';
 import { interpretar as interpretarCatalogo, aplicar as aplicarCatalogo } from './importar.js';
 
@@ -429,58 +429,113 @@ async function modalProducto(producto) {
 /* Lista de compra y recepción                                         */
 /* ------------------------------------------------------------------ */
 
+/* La recepción NO se limita a lo que está bajo el par.
+
+   Antes esta pantalla se construía solo desde listaCompra(), así que un producto
+   que llegara sin estar bajo su nivel —una caja de más, algo para un evento, un
+   producto nuevo— no aparecía y no había forma de recibirlo. La salida era
+   meterlo por conteo físico, y entonces el historial decía "ajuste" en vez de
+   "llegó mercancía del proveedor". Peor: con el inventario entero en nivel, la
+   pantalla se rendía con un "no hay nada que ordenar" y no dejaba recibir nada.
+
+   Ahora la lista de compra es la sugerencia, y el buscador deja añadir cualquier
+   producto a la recepción. */
 async function vistaCompra() {
-  const lista = await listaCompra();
-  if (!lista.length) {
-    return seccion('Lista de compra', 'Todo el inventario está en nivel. No hay nada que ordenar.');
-  }
+  const [lista, productos] = await Promise.all([listaCompra(), productosActivos()]);
   const totalUnidades = lista.reduce((s, p) => s + p.aOrdenar, 0);
   const totalCosto = lista.reduce((s, p) => s + p.costoOrden, 0);
 
-  const entradas = new Map(lista.map((p) => [p.id, p.aOrdenar]));
+  /* productoId -> { producto, cantidad, sugerido } */
+  const filas = new Map(lista.map((p) => [p.id, { producto: p, cantidad: p.aOrdenar, sugerido: p.aOrdenar }]));
 
-  const cuerpoTabla = tabla(
-    ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Par', num: true },
-      { t: 'Sugerido', num: true }, { t: 'Recibido', num: true }, { t: 'Costo', num: true }],
-    lista.map((p) => {
-      const entrada = el('input', {
-        type: 'number', min: '0', step: '1', value: String(p.aOrdenar),
-        estilo: { width: '92px', minHeight: '48px', textAlign: 'right' },
-        oninput: () => entradas.set(p.id, Math.max(0, parseInt(entrada.value, 10) || 0)),
-      });
-      return el('tr', {}, [
-        el('td', { texto: p.nombre }),
-        el('td', {}, [etiquetaEstado(p.estado)]),
-        el('td', { clase: 'num', texto: String(p.existencia) }),
-        el('td', { clase: 'num', texto: String(p.par) }),
-        el('td', { clase: 'num', texto: String(p.aOrdenar) }),
-        el('td', { clase: 'num' }, [entrada]),
-        el('td', { clase: 'num', texto: dinero(p.costoOrden) }),
-      ]);
-    }),
-  );
+  const contenedorTabla = el('div');
+  const buscador = el('input', {
+    type: 'search', placeholder: 'Buscar cualquier producto para añadirlo…',
+    autocomplete: 'off', autocorrect: 'off', autocapitalize: 'none', spellcheck: 'false',
+  });
+  const resultados = el('div', { clase: 'resultados-busqueda' });
+
+  const pintarTabla = () => {
+    const items = [...filas.values()];
+    contenedorTabla.replaceChildren(items.length
+      ? tabla(
+        ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Par', num: true },
+          { t: 'Sugerido', num: true }, { t: 'Recibido', num: true }, ''],
+        items.map(({ producto: p, cantidad, sugerido }) => {
+          const entrada = el('input', {
+            type: 'number', min: '0', step: '1', value: String(cantidad),
+            estilo: { width: '92px', minHeight: '48px', textAlign: 'right' },
+            oninput: () => {
+              filas.get(p.id).cantidad = Math.max(0, parseInt(entrada.value, 10) || 0);
+            },
+          });
+          return el('tr', {}, [
+            el('td', { texto: p.nombre }),
+            el('td', {}, [etiquetaEstado(estadoStock(p))]),
+            el('td', { clase: 'num', texto: String(p.existencia) }),
+            el('td', { clase: 'num', texto: String(p.par) }),
+            el('td', { clase: 'num', texto: sugerido ? String(sugerido) : '—' }),
+            el('td', { clase: 'num' }, [entrada]),
+            el('td', { clase: 'num' }, [el('button', {
+              clase: 'btn btn-chico btn-fantasma',
+              texto: 'Quitar',
+              onclick: () => { filas.delete(p.id); pintarTabla(); },
+            })]),
+          ]);
+        }),
+      )
+      : el('p', { clase: 'vacio', texto: 'No hay nada en la recepción. Busca un producto arriba para añadirlo.' }));
+  };
+
+  const pintarResultados = () => {
+    const q = normalizar(buscador.value.trim());
+    if (q.length < 2) { resultados.replaceChildren(); return; }
+    const encontrados = productos
+      .filter((p) => !filas.has(p.id) && normalizar(`${p.nombre} ${p.tamano || ''}`).includes(q))
+      .slice(0, 8);
+    resultados.replaceChildren(...(encontrados.length
+      ? encontrados.map((p) => el('button', {
+        clase: 'btn btn-chico',
+        texto: `${p.nombre}${p.tamano ? ` · ${p.tamano}` : ''}  (quedan ${p.existencia})`,
+        onclick: () => {
+          filas.set(p.id, { producto: p, cantidad: 0, sugerido: 0 });
+          buscador.value = '';
+          resultados.replaceChildren();
+          pintarTabla();
+        },
+      }))
+      : [el('p', { clase: 'ayuda', texto: 'Ningún producto con ese nombre.' })]));
+  };
+
+  buscador.oninput = pintarResultados;
+  pintarTabla();
 
   const proveedor = el('input', { type: 'text', maxlength: String(LARGO.referencia), placeholder: 'Proveedor o número de factura' });
 
   return el('div', {}, [
     seccion('Lista de compra',
-      `${lista.length} productos bajo el par · ${totalUnidades} unidades sugeridas · ${dinero(totalCosto)} estimado a costo.`,
-      el('div', { clase: 'seccion-barra' }, [
+      lista.length
+        ? `${lista.length} productos bajo el par · ${totalUnidades} unidades sugeridas · ${dinero(totalCosto)} estimado a costo.`
+        : 'Todo el inventario está en nivel: no hay nada que ordenar hoy. Si aun así llega mercancía, se recibe abajo.',
+      lista.length ? el('div', { clase: 'seccion-barra' }, [
         el('span', { clase: 'crece' }),
         el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Exportar CSV', onclick: () => exportarCompra(lista) }),
         el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Imprimir', onclick: () => window.print() }),
-      ]),
-      cuerpoTabla),
+      ]) : null),
+
     seccion('Recibir la orden',
-      'Cuando llegue el pedido, ajusta la columna Recibido con lo que de verdad entró y confirma. Entra al almacén solo lo que escribas aquí.',
+      'Ajusta la columna Recibido con lo que de verdad entró —no con lo que se pidió— y confirma. Entra al almacén solo lo que escribas aquí. Si llegó algo que no estaba en la lista, búscalo y añádelo.',
+      campo('Añadir un producto que no está en la lista', buscador),
+      resultados,
+      contenedorTabla,
       campo('Referencia', proveedor, 'Queda en el historial junto a la entrada.'),
       el('button', {
         clase: 'btn btn-primario',
         texto: 'Registrar entrada al almacén',
         onclick: async () => {
-          const lineas = [...entradas.entries()]
-            .filter(([, c]) => c > 0)
-            .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+          const lineas = [...filas.values()]
+            .filter(({ cantidad }) => cantidad > 0)
+            .map(({ producto, cantidad }) => ({ productoId: producto.id, cantidad }));
           if (!lineas.length) { brindis({ texto: 'No hay cantidades que registrar', tipo: 'error' }); return; }
           const total = lineas.reduce((s, l) => s + l.cantidad, 0);
           if (!await confirmar({

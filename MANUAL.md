@@ -118,8 +118,13 @@ Tres cosas que conviene saber:
 2. Ahí sale todo lo que hay que ordenar y cuánto, ya calculado.
 3. Cuando llegue el pedido, escribe en la columna **Recibido** lo que de verdad
    entró (no lo que se pidió — lo que llegó).
-4. Escribe el proveedor o el número de factura.
-5. Toca **Registrar entrada al almacén**.
+4. **Si llegó algo que no estaba en la lista** —una caja de más, un producto
+   nuevo, algo para un evento— búscalo en el encasillado de arriba y añádelo.
+   Se puede recibir cualquier producto, esté bajo el par o no.
+5. Escribe el proveedor o el número de factura.
+6. Toca **Registrar entrada al almacén**.
+
+Aunque no haya nada bajo el par, la pantalla deja recibir igual.
 
 ---
 

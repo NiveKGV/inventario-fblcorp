@@ -494,6 +494,12 @@ th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: v
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:active { background: var(--panel); }
 
+/* Resultados del buscador de la recepción: botones grandes, porque esto se
+   toca con el dedo en el almacén y no con un ratón. */
+.resultados-busqueda { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; }
+.resultados-busqueda .btn { min-height: 44px; }
+.resultados-busqueda .ayuda { margin: 0; }
+
 /* --- Historial agrupado por operación --- */
 
 .fila-lote { cursor: pointer; }
