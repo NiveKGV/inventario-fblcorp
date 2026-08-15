@@ -18,7 +18,7 @@ usarse. Las apps añadidas a la pantalla de inicio están fuera de esa regla.
 Si lo usan como pestaña de Safari, un fin de semana largo puede costarles el
 inventario completo.
 
-Esto no sustituye el respaldo (punto 7). Nada de lo que hace iOS por su cuenta
+Esto no sustituye el respaldo (punto 8). Nada de lo que hace iOS por su cuenta
 es una copia de seguridad que puedas dar por garantizada.
 
 ---
@@ -86,7 +86,33 @@ porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
 
 ---
 
-## 5. Cuando llega la orden del proveedor
+## 5. Cargar el catálogo desde Excel
+
+Para montar el catálogo de golpe, o para añadir muchos productos de una vez, no
+hay que entrarlos uno por uno.
+
+1. Llena la plantilla de Excel: producto, categoría, tamaño, costo, existencia
+   de hoy y **cuánto se pide en un mes típico** de cada uno.
+2. En Excel: **Archivo → Guardar como → CSV**, parado en la hoja «Catálogo».
+3. Guarda el archivo en iCloud Drive.
+4. En el iPad: **Administración → Sistema → Importar catálogo**, escoge el
+   archivo y toca **Revisar archivo**.
+5. Sale una pantalla de revisión: cuántos productos entran, cuáles se
+   actualizan, qué categorías se van a crear y qué filas tienen error.
+   **Nada se guarda hasta que confirmes.**
+
+Tres cosas que conviene saber:
+
+- **No borra nada.** Un producto que no aparezca en el archivo se queda igual.
+- **A los productos que ya existen no les cambia la existencia**, solo el costo,
+  el tamaño y los niveles. La existencia la manda el inventario, no una hoja.
+- **Los niveles par se calculan solos** con el pedido mensual. Si prefieres
+  fijarlos a mano en algún producto, llena las columnas Par y Reorden y esas
+  mandan.
+
+---
+
+## 6. Cuando llega la orden del proveedor
 
 1. **Administración → Lista de compra.**
 2. Ahí sale todo lo que hay que ordenar y cuánto, ya calculado.
@@ -97,7 +123,7 @@ porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
 
 ---
 
-## 6. El conteo físico
+## 7. El conteo físico
 
 Una vez por semana, para que el sistema no se despegue de la realidad:
 
@@ -110,7 +136,7 @@ La diferencia queda guardada con tu nombre. Nada se borra nunca.
 
 ---
 
-## 7. El respaldo — lo más importante de este manual
+## 8. El respaldo — lo más importante de este manual
 
 **Todo vive dentro de ese iPad.** Si el iPad se pierde, se cae o alguien borra la
 app, se va el inventario y el historial completo. No hay copia en ninguna nube.
@@ -129,7 +155,7 @@ Para recuperar todo en un iPad nuevo: **Sistema → Restaurar un respaldo**.
 
 ---
 
-## 8. Los reportes
+## 9. Los reportes
 
 **Administración → Reportes.** Escoge el período y verás:
 
@@ -151,7 +177,7 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 
 ---
 
-## 9. Cosas que conviene saber
+## 10. Cosas que conviene saber
 
 - **Un código de 5 dígitos dice quién fue, no impide que alguien use el de otro.**
   Si alguien ve el código de un compañero, puede usarlo. Que cada quien lo

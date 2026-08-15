@@ -448,6 +448,116 @@ await lanza(
 );
 
 /* ------------------------------------------------------------------ */
+seccion('Importación de catálogo');
+
+const I = await import('./js/importar.js');
+
+/* --- Lectura del CSV --- */
+
+igual(I.parsearCSV('a,b\n1,2').length, 2, 'Lee encabezado y fila');
+igual(I.parsearCSV('a,b\r\n1,2\r\n')[1], ['1', '2'], 'Aguanta saltos de línea de Windows');
+igual(I.parsearCSV('﻿a,b\n1,2')[0][0], 'a', 'Se come la marca BOM que pone Excel');
+igual(I.parsearCSV('nombre\n"Ron, añejo"')[1], ['Ron, añejo'], 'Una coma dentro de comillas no parte el campo');
+igual(I.parsearCSV('nombre\n"Jack Daniel\'s"')[1], ["Jack Daniel's"], 'El apóstrofo no rompe la lectura');
+igual(I.parsearCSV('nombre\n"Dijo ""hola"""')[1], ['Dijo "hola"'], 'Comillas escapadas dentro del campo');
+igual(I.parsearCSV('a;b;c\n1;2;3')[1], ['1', '2', '3'], 'Detecta el punto y coma del Excel en español');
+igual(I.parsearCSV('a,b\n\n\n1,2').length, 2, 'Salta las filas en blanco de la plantilla');
+
+/* --- Números --- */
+
+igual(I.aNumero('$32.50'), 32.5, 'Le quita el signo de dólar');
+igual(I.aNumero('32,50'), 32.5, 'La coma decimal del Excel en español');
+igual(I.aNumero('1,250'), 1250, 'Tres dígitos tras la coma: separador de miles');
+igual(I.aNumero('1.250,75'), 1250.75, 'Formato español completo: punto de miles y coma decimal');
+igual(I.aNumero('1,250.75'), 1250.75, 'Formato inglés completo: coma de miles y punto decimal');
+igual(I.aNumero('1,234,567'), 1234567, 'Varias comas son siempre separador de miles');
+igual(I.aNumero(''), null, 'Vacío es null, no cero');
+anotar(Number.isNaN(I.aNumero('veinte')), 'Un texto que no es número da NaN y no cero');
+
+/* --- Niveles calculados --- */
+
+igual(I.nivelesDesdePedido(35), { par: 14, reorden: 10, calculado: true },
+  'Producto rápido: 35 al mes da par 14 y reorden 10');
+igual(I.nivelesDesdePedido(2), { par: 2, reorden: 1, calculado: true },
+  'Producto lento: 2 al mes da par 2 y reorden 1, no cero');
+igual(I.nivelesDesdePedido(0), { par: 0, reorden: 0, calculado: false },
+  'Sin pedido no se inventa un nivel');
+anotar(I.nivelesDesdePedido(50).par > I.nivelesDesdePedido(50).reorden,
+  'El par siempre queda por encima del punto de reorden');
+
+/* --- Interpretación --- */
+
+const CAB = 'Producto,Categoría,Tamaño,Costo,Existencia hoy,Cuánto se pide en un mes típico,Par,Reorden';
+const cats = await DB.todos('categorias');
+const catUno = cats[0] || { id: 'whisky', nombre: 'Whisky' };
+
+const plan1 = I.interpretar(
+  `${CAB}\nNuevo Uno,${catUno.nombre},750 ml,20,5,35,,\nSin Categoria,,750 ml,20,5,10,,`,
+  { categorias: cats, productos: [] },
+);
+igual(plan1.lineas.length, 1, 'La fila sin categoría no entra');
+igual(plan1.errores.length, 1, 'Y queda reportada como error');
+anotar(plan1.errores[0].mensaje.includes('no tiene categoría'), 'El error dice qué le falta');
+igual(plan1.errores[0].fila, 3, 'El número de fila apunta a la del archivo, no al índice');
+
+const plan2 = I.interpretar(
+  `${CAB}\nRepetido,${catUno.nombre},750 ml,20,5,10,,\nRepetido,${catUno.nombre},750 ml,20,5,10,,`,
+  { categorias: cats, productos: [] },
+);
+igual(plan2.lineas.length, 1, 'Un producto repetido en el archivo entra una sola vez');
+anotar(plan2.errores[0].mensaje.includes('repetido'), 'Y se avisa cuál se repitió');
+
+const plan3 = I.interpretar(`${CAB}\nCon Sake,Sake,720 ml,80,2,4,,`, { categorias: cats, productos: [] });
+igual(plan3.categoriasNuevas, ['Sake'], 'Detecta la categoría que no existe todavía');
+
+const plan4 = I.interpretar(`${CAB}\nManual,${catUno.nombre},750 ml,20,5,40,12,8`, { categorias: cats, productos: [] });
+igual([plan4.lineas[0].par, plan4.lineas[0].reorden], [12, 8],
+  'El par escrito a mano le gana al calculado');
+
+igual(I.interpretar('cualquier,cosa\n1,2', { categorias: cats, productos: [] }).fatal !== undefined, true,
+  'Un archivo sin las columnas necesarias se rechaza entero');
+anotar(I.interpretar(CAB, { categorias: cats, productos: [] }).fatal !== undefined,
+  'Un archivo con encabezado pero sin datos se rechaza');
+
+const planAlias = I.interpretar(
+  `Nombre,Categoria,Presentacion,Precio,Inventario,Consumo mensual\nAlias,${catUno.nombre},750 ml,20,5,35`,
+  { categorias: cats, productos: [] },
+);
+igual(planAlias.lineas.length, 1, 'Reconoce los encabezados aunque estén escritos distinto');
+igual(planAlias.lineas[0].par, 14, 'Y calcula igual con esos encabezados');
+
+/* --- Escritura --- */
+
+const yaExiste = await producto('Producto Que Ya Existe', 40, 10, 5, 15);
+const planEsc = I.interpretar(
+  `${CAB}\nProducto Que Ya Existe,${catUno.nombre},1 L,99,7,35,,\nProducto Recién Nacido,${catUno.nombre},750 ml,25,6,35,,`,
+  { categorias: cats, productos: await DB.todos('productos') },
+);
+igual([planEsc.resumen.crear, planEsc.resumen.actualizar], [1, 1], 'Distingue crear de actualizar');
+
+const antesDeImportar = (await DB.todos('movimientos')).length;
+const res = await I.aplicar(planEsc, EMP);
+igual([res.creados, res.actualizados], [1, 1], 'Escribe uno nuevo y actualiza el que ya estaba');
+
+const trasImportar = await DB.todos('productos');
+const viejo = trasImportar.find((p) => p.id === yaExiste.id);
+igual(viejo.existencia, 40,
+  'La existencia de un producto que ya existía NO se pisa con la del archivo');
+igual([viejo.costo, viejo.tamano], [99, '1 L'],
+  'Pero el costo y el tamaño sí se actualizan');
+
+const nacido = trasImportar.find((p) => p.nombre === 'Producto Recién Nacido');
+igual(nacido.existencia, 6, 'El producto nuevo sí arranca con la existencia del archivo');
+
+const movsTrasCarga = await DB.todos('movimientos');
+const deCarga = movsTrasCarga.filter((m) => m.motivo === 'Carga inicial de catálogo');
+igual(movsTrasCarga.length - antesDeImportar, 1,
+  'La carga deja exactamente un movimiento: el del producto nuevo');
+igual([deCarga[0].tipo, deCarga[0].delta, deCarga[0].existenciaAntes], ['ajuste', 6, 0],
+  'La existencia inicial entra como ajuste desde cero, con rastro en el historial');
+igual(deCarga[0].restauranteId, null, 'La carga inicial no se le carga a ningún restaurante');
+
+/* ------------------------------------------------------------------ */
 
 const total = document.getElementById('total');
 total.textContent = fallidas === 0

@@ -7,7 +7,7 @@
    Al publicar una versión nueva, sube el número de VERSION: eso invalida el
    caché viejo. Sin ese cambio el iPad se queda con la versión anterior. */
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `almacen-licores-${VERSION}`;
 
 const ARCHIVOS = [
@@ -20,6 +20,7 @@ const ARCHIVOS = [
   './js/db.js',
   './js/cripto.js',
   './js/datos.js',
+  './js/importar.js',
   './js/modelo.js',
   './js/ui.js',
   './iconos/icono-180.png',

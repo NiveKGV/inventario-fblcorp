@@ -43,6 +43,7 @@ css/estilos.css     Todo el estilo. Sin framework
 js/db.js            IndexedDB: esquema, transacciones, exportar e importar
 js/cripto.js        PBKDF2 para los códigos de acceso
 js/datos.js         Los 4 restaurantes, las categorías y el catálogo de ejemplo
+js/importar.js      Carga del catálogo desde CSV: lectura, revisión y escritura
 js/modelo.js        Reglas de negocio: movimientos, existencias, reportes
 js/ui.js            Pantallas, modal, avisos flotantes, formato, descargas
 js/app.js           Arranque, sesión, flujo del empleado
@@ -181,6 +182,23 @@ Detalles que sostienen esta publicación y no hay que romper:
 - **Las tarjetas del resumen abren el detalle.** Un número suelto ("3 agotados")
   obliga a irse a otra pestaña a averiguar cuáles son. Son `<button>` de verdad,
   no `div` con `onclick`, para que el iPad les dé el resaltado al tocar.
+- **La importación de catálogo nunca borra y nunca pisa existencias.** Crea los
+  productos que faltan y actualiza los que están, emparejando por nombre
+  normalizado. La existencia solo se fija al **crear**: si se pisara, reimportar
+  el catálogo corregido en marzo devolvería el inventario a los números de
+  enero. La existencia inicial entra como movimiento de `ajuste` con motivo
+  "Carga inicial de catálogo" — sin eso, el historial no cuadraría desde el
+  primer día y dejaría de servir como evidencia. Todo en una transacción:
+  doscientos productos entran completos o no entra ninguno.
+- **Los niveles par salen del pedido mensual, no de un estimado de consumo.**
+  Lo que se pide está en una factura; lo que se consume hay que adivinarlo 200
+  veces. Con el ciclo real del cliente (piden lunes, llega martes o miércoles):
+  reorden = mensual ÷ 4.3 × 1.2, par = mensual ÷ 4.3 × 1.7, con pisos de 1 y 2
+  y el par siempre por encima del reorden. Las columnas Par y Reorden del
+  archivo, si vienen llenas, le ganan al cálculo.
+- **El separador del CSV se detecta, no se asume.** Excel en español exporta con
+  punto y coma. Un archivo mal leído no da error: da doscientos productos con el
+  nombre pegado a la categoría. Igual con la coma decimal (`aNumero`).
 - **Buscador que ignora acentos** (`normalizar` en `ui.js`): busca sobre nombre,
   categoría y tamaño, porque "ron" debe traer la categoría completa y "caja" las
   cervezas. Nadie va a escribir "Patrón" con tilde en un almacén.

@@ -16,6 +16,7 @@ import {
   $, el, mostrarPantalla, abrirModal, cerrarModal, confirmar,
   brindis, dinero, numero, descargar, aCSV,
 } from './ui.js';
+import { interpretar as interpretarCatalogo, aplicar as aplicarCatalogo } from './importar.js';
 
 /* Topes de longitud. No son cosmética: la lista de compra tiene botón de
    imprimir, y un nombre de producto sin límite se convierte en papel saliendo
@@ -1159,6 +1160,103 @@ function mostrarCodigos(empleados, omitidos = []) {
   });
 }
 
+/* Revisión antes de escribir. Cargar doscientos productos a ciegas sobre el
+   inventario real es exactamente el tipo de operación que sale mal en silencio:
+   aquí se ve qué entra, qué se actualiza, qué categorías se inventan y qué
+   filas se saltan, y nada toca la base hasta que el gerente confirma.
+
+   Las filas con error no bloquean al resto: con doscientos productos, una
+   celda mal escrita no puede impedir la carga completa. Se saltan y se dicen. */
+function modalPrevioCatalogo(plan) {
+  const { resumen, errores, categoriasNuevas, lineas } = plan;
+
+  const dato = (valor, etiqueta, clase = '') => el('div', { clase: `tarjeta-dato ${clase}` }, [
+    el('div', { clase: 'v', texto: String(valor) }),
+    el('div', { clase: 'e', texto: etiqueta }),
+  ]);
+
+  const cuerpo = el('div', {}, [
+    el('div', { clase: 'tarjetas-resumen' }, [
+      dato(resumen.crear, 'productos nuevos'),
+      dato(resumen.actualizar, 'se actualizan', resumen.actualizar ? 'aviso' : ''),
+      dato(categoriasNuevas.length, 'categorías nuevas', categoriasNuevas.length ? 'aviso' : ''),
+      dato(errores.length, 'filas con error', errores.length ? 'alerta' : ''),
+    ]),
+
+    categoriasNuevas.length ? el('p', { clase: 'desc' }, [
+      el('b', { texto: 'Se van a crear estas categorías: ' }),
+      categoriasNuevas.join(', '),
+      '. Si alguna es un error de escritura de una que ya existe, cancela y corrígela en el archivo.',
+    ]) : null,
+
+    resumen.sinNivel ? el('p', { clase: 'desc', texto:
+      `${resumen.sinNivel} ${resumen.sinNivel === 1 ? 'producto queda' : 'productos quedan'} sin nivel par `
+      + 'porque no traen pedido mensual. Se cargan igual, pero no van a alertar cuando se acaben '
+      + 'hasta que se les ponga un par.' }) : null,
+
+    errores.length ? el('div', { clase: 'seccion' }, [
+      el('h2', { texto: 'Filas que se van a saltar' }),
+      tabla(['Fila', 'Qué pasa'], errores.slice(0, 40).map((e) => el('tr', {}, [
+        el('td', { clase: 'num', texto: String(e.fila) }),
+        el('td', { texto: e.mensaje }),
+      ]))),
+    ]) : null,
+
+    lineas.length ? el('div', { clase: 'seccion' }, [
+      el('h2', { texto: `Lo que se va a cargar${lineas.length > 30 ? ' (primeros 30)' : ''}` }),
+      tabla(
+        ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Par', num: true }, { t: 'Reorden', num: true }, ''],
+        lineas.slice(0, 30).map((l) => el('tr', {}, [
+          el('td', { texto: l.nombre }),
+          el('td', { texto: l.categoriaNombre }),
+          el('td', { clase: 'num', texto: l.accion === 'crear' ? String(l.existencia) : '—' }),
+          el('td', { clase: 'num', texto: l.par ? String(l.par) : '—' }),
+          el('td', { clase: 'num', texto: l.reorden ? String(l.reorden) : '—' }),
+          el('td', {}, [el('span', {
+            clase: `etiqueta ${l.accion === 'crear' ? 'ok' : 'bajo'}`,
+            texto: l.accion === 'crear' ? 'Nuevo' : 'Actualiza',
+          })]),
+        ])),
+      ),
+    ]) : el('p', { clase: 'vacio', texto: 'No hay ninguna fila válida que cargar.' }),
+  ].filter(Boolean));
+
+  abrirModal({
+    titulo: 'Revisión antes de importar',
+    subtitulo: 'Todavía no se ha escrito nada. Revisa y confirma.',
+    contenido: cuerpo,
+    ancho: true,
+    botones: [
+      { texto: 'Cancelar', accion: cerrarModal },
+      ...(lineas.length ? [{
+        texto: `Importar ${lineas.length} ${lineas.length === 1 ? 'producto' : 'productos'}`,
+        clase: 'btn-primario',
+        accion: async () => {
+          cerrarModal();
+          try {
+            const r = await aplicarCatalogo(plan, {
+              empleadoId: ctx.gerente.id,
+              empleadoNombre: ctx.gerente.nombre,
+            });
+            await ctx.refrescarCache();
+            brindis({
+              texto: `${r.creados} productos creados, ${r.actualizados} actualizados`,
+              sub: r.movimientos
+                ? `La existencia inicial quedó en el historial como ajuste, a tu nombre.`
+                : 'No había existencias iniciales que registrar.',
+              tipo: 'exito',
+              segundos: 9,
+            });
+            render();
+          } catch (e) {
+            brindis({ texto: 'No se importó nada', sub: e.message, tipo: 'error', segundos: 10 });
+          }
+        },
+      }] : []),
+    ],
+  });
+}
+
 async function vistaSistema() {
   const ultimo = await DB.leerConfig('ultimo_respaldo', null);
   const dias = await diasSinRespaldo();
@@ -1176,6 +1274,7 @@ async function vistaSistema() {
   };
 
   const archivo = el('input', { type: 'file', accept: '.json,application/json' });
+  const archivoCatalogo = el('input', { type: 'file', accept: '.csv,text/csv' });
 
   return el('div', {}, [
     await bandaRespaldo(),
@@ -1224,6 +1323,28 @@ async function vistaSistema() {
             render();
           } catch (e) {
             brindis({ texto: 'No se pudo restaurar', sub: e.message, tipo: 'error', segundos: 10 });
+          }
+        },
+      })),
+
+    seccion('Importar catálogo',
+      'Carga productos desde la plantilla llena, guardada como CSV. Nunca borra: crea los que no están y actualiza los que sí, emparejando por nombre. La existencia solo se fija al crear un producto nuevo — la de los que ya existen la manda el inventario, no la hoja.',
+      campo('Archivo del catálogo (.csv)', archivoCatalogo),
+      el('button', {
+        clase: 'btn btn-primario',
+        texto: 'Revisar archivo',
+        onclick: async () => {
+          const f = archivoCatalogo.files?.[0];
+          if (!f) { brindis({ texto: 'Escoge primero un archivo', tipo: 'error' }); return; }
+          try {
+            const [categorias, productos] = await Promise.all([
+              DB.todos('categorias'), DB.todos('productos'),
+            ]);
+            const plan = interpretarCatalogo(await f.text(), { categorias, productos });
+            if (plan.fatal) { brindis({ texto: 'No se pudo leer', sub: plan.fatal, tipo: 'error', segundos: 10 }); return; }
+            modalPrevioCatalogo(plan);
+          } catch (e) {
+            brindis({ texto: 'No se pudo leer el archivo', sub: e.message, tipo: 'error', segundos: 8 });
           }
         },
       })),
