@@ -221,13 +221,13 @@ function esCampoDeTexto(n) {
       dejan pasar intactos: soltar el foco ahí mueve el teclado a mitad del
       gesto y el toque termina cayendo en el elemento equivocado.
 
-   2. Enter obligaba a seleccionar el próximo campo a mano. En un conteo
-      físico se va fila por fila con las manos ocupadas, así que Enter salta
-      al siguiente campo de cantidad y selecciona lo que tenga, como en una
-      hoja de cálculo. En el último ya no hay a dónde saltar y cierra el
-      teclado. La tecla lo dice: "Siguiente" mientras queden campos, "Listo"
-      en el último. En el buscador siempre cierra, porque no encabeza ninguna
-      columna que recorrer.
+   2. Enter obligaba a seleccionar el próximo campo a mano. Ahora recorre el
+      formulario entero —nombre, categoría, tamaño, cantidades— y no solo las
+      columnas de números, que era como estaba al principio: en la pantalla de
+      añadir un producto los primeros encasillados se quedaban fuera y había
+      que tocar cada uno. En el último campo del grupo ya no hay a dónde
+      saltar y se cierra el teclado. La tecla lo dice: "Siguiente" mientras
+      queden campos, "Listo" en el último.
 
    3. Corregir un número obligaba a borrar dígito por dígito. Al entrar a un
       campo numérico se selecciona lo que ya está escrito, así que teclear lo
@@ -243,36 +243,56 @@ function activarComportamientoDeCampos() {
 
   document.addEventListener('focusin', (ev) => {
     const n = ev.target;
-    if (!(n instanceof HTMLInputElement) || n.type !== 'number') return;
-    n.setAttribute('enterkeyhint', siguienteCampoNumerico(n) ? 'next' : 'done');
-    // select() en el mismo turno lo pisa el propio gesto del toque en iOS.
-    setTimeout(() => { if (document.activeElement === n) n.select(); }, 0);
+    if (!esCampoNavegable(n)) return;
+    n.setAttribute('enterkeyhint', siguienteCampo(n) ? 'next' : 'done');
+    if (n instanceof HTMLInputElement && n.type === 'number') {
+      // select() en el mismo turno lo pisa el propio gesto del toque en iOS.
+      setTimeout(() => { if (document.activeElement === n) n.select(); }, 0);
+    }
   });
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Enter') return;
     const n = ev.target;
-    if (!(n instanceof HTMLInputElement)) return;
-    if (n.type === 'search') { n.blur(); return; }
-    if (n.type !== 'number') return;
+    if (!esCampoNavegable(n)) return;
 
-    const siguiente = siguienteCampoNumerico(n);
-    if (!siguiente) { n.blur(); return; }
+    const siguiente = siguienteCampo(n);
     // Sin esto el iPad interpreta el Enter además como envío y recarga.
     ev.preventDefault();
+    if (!siguiente) { n.blur(); return; }
     siguiente.focus();
-    siguiente.select();
+    if (siguiente instanceof HTMLInputElement && siguiente.type === 'number') siguiente.select();
     // `focus()` ya lo trae a la vista, pero con el teclado ocupando media
     // pantalla el campo puede quedar justo debajo del borde.
     siguiente.scrollIntoView({ block: 'nearest' });
   });
 }
 
-/* El próximo campo de cantidad en el orden en que se ven en pantalla. Se
-   descartan los ocultos porque la tabla se filtra con el buscador: saltar a un
-   campo que no está a la vista deja al usuario escribiendo a ciegas. */
-function siguienteCampoNumerico(actual) {
-  const campos = [...document.querySelectorAll('input[type="number"]')]
+/* Qué cuenta como campo del formulario para el recorrido con Enter.
+
+   Los de archivo quedan fuera: abren el selector del sistema, y aterrizar ahí
+   con Enter sacaría al usuario de la app sin que lo pidiera. */
+const CAMPOS = 'input:not([type="file"]), select, textarea';
+
+function esCampoNavegable(n) {
+  return (n instanceof HTMLInputElement && n.type !== 'file')
+    || n instanceof HTMLSelectElement
+    || n instanceof HTMLTextAreaElement;
+}
+
+/* El próximo campo en el orden en que se ven en pantalla, dentro del mismo
+   grupo.
+
+   El grupo importa: sin acotarlo, Enter en el último campo de un modal saltaría
+   a un control de la pantalla que hay detrás, que ni siquiera se está mirando.
+   Se busca el modal primero porque cuando hay uno abierto es lo único con lo
+   que se puede interactuar.
+
+   Se descartan los ocultos porque las tablas se filtran con el buscador: saltar
+   a un campo que no está a la vista deja a la persona escribiendo a ciegas. */
+function siguienteCampo(actual) {
+  const grupo = actual.closest('#modal, .modal, #admin-cuerpo, .pantalla.activa') || document;
+  const campos = [...grupo.querySelectorAll(CAMPOS)]
     .filter((c) => !c.disabled && !c.readOnly && c.offsetParent !== null);
   const i = campos.indexOf(actual);
   return i >= 0 && i < campos.length - 1 ? campos[i + 1] : null;
