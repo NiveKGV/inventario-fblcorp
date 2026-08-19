@@ -129,9 +129,10 @@ Detalles que sostienen esta publicación y no hay que romper:
 - **`.nojekyll`** evita que Pages procese el repo como un blog de Jekyll.
 - **`noindex` en `index.html` y `robots.txt`** — el repo es público, pero el
   sitio no tiene por qué salir en buscadores.
-- **Los códigos de los empleados de ejemplo están en texto claro** en
-  `datos.js`. Es data de demostración y el repo es público: en una instalación
-  real hay que borrar esos empleados o cambiarles el código.
+- **Los códigos de los empleados de ejemplo se sortean al instalar** y se
+  muestran una vez. Antes estaban escritos en claro en `datos.js`, dentro de un
+  repositorio público, y la pantalla de instalación trae el catálogo de ejemplo
+  marcado por omisión: quien encontrara el repo tenía ocho códigos válidos.
 
 ## Decisiones y sus porqués
 
@@ -331,3 +332,41 @@ Estaban fusionadas en «Tequila y Mezcal». Se separaron en `tequila` (orden 4) 
 categorías. La plantilla `.xlsx`, su menú desplegable y la guía impresa dicen lo
 mismo. No hizo falta migrar nada: ninguna instalación real tenía el catálogo
 cargado todavía.
+
+
+### Hallazgos del chequeo de seguridad (agosto 2026)
+
+**El respaldo era la puerta trasera del historial.** `importarTodo` vaciaba
+todos los stores antes de escribir, `movimientos` incluido. El archivo de
+respaldo es JSON legible, así que bastaba con exportarlo, quitarle a mano la
+línea de una salida incómoda, cuadrar la existencia del producto y restaurar:
+la salida desaparecía y el inventario cuadraba solo, sin dejar rastro.
+Demostrado sobre la app corriendo: de tres movimientos quedaban dos.
+
+`DB.borrar` ya se negaba a borrar movimientos; esta función lo saltaba por
+detrás. Ahora el historial **no se reemplaza, solo se le añade**, y cada
+restauración queda anotada en `config.restauraciones` con quién la hizo y
+cuántos movimientos había antes y después. Si el conteo baja, se ve en una
+banda arriba del Historial. Restaurar en un iPad nuevo funciona igual.
+
+Importa porque la propuesta le promete al cliente, por escrito, que «eso
+convierte el historial en evidencia y no en una lista editable».
+
+**El respaldo lleva todo en claro y la app decía que lo mandaras por correo.**
+El archivo contiene nombres del personal, historial completo y los códigos
+cifrados. Con la sal compartida, un solo recorrido de las 100.000
+combinaciones de 5 dígitos los rompe todos a la vez: medido, 22,4 ms por
+derivación, 37 minutos para el espacio entero. El aviso ahora manda guardarlo
+en el iCloud del negocio y advierte de no mandarlo por correo ni WhatsApp.
+**Cifrar el respaldo con una frase sigue pendiente** y es una decisión con
+costo: si se pierde la frase, el respaldo no se recupera.
+
+**Límite aceptado, sin arreglo posible sin servidor:** el bloqueo por intentos
+fallidos vive en el IndexedDB del propio aparato. Se puede reescribir con el
+iPad desbloqueado y el Inspector de Safari conectado. La cerradura real es el
+código de bloqueo del iPad, y eso va en el manual.
+
+**Revisado y limpio:** sin XSS (probado con un nombre de producto con marcado,
+sale como texto porque `el()` usa `textContent` en todas partes), sin secretos
+en el historial de git, sin inyección posible (no hay SQL ni comandos), sin
+dependencias externas, y ningún dato sale del iPad.

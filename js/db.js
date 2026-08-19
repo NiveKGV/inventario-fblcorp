@@ -153,21 +153,44 @@ const DB = {
     };
   },
 
-  /* Reemplaza el contenido completo. Se usa solo al restaurar un respaldo,
-     con confirmación explícita del gerente. */
+  /* Reemplaza el contenido a partir de un respaldo — con una excepción que es
+     la razón de ser de este sistema.
+
+     El historial NO se reemplaza: solo se le añade. Antes se vaciaba como
+     todo lo demás, y eso abría el único camino para borrar evidencia sin
+     dejar rastro: el archivo de respaldo es JSON legible, así que bastaba con
+     exportarlo, quitarle a mano la línea de una salida incómoda, cuadrar la
+     existencia del producto y restaurar. La salida desaparecía y el inventario
+     cuadraba solo. Probado: de tres movimientos quedaban dos, sin reversión ni
+     nota de ningún tipo.
+
+     `DB.borrar` ya se niega a borrar movimientos por esa misma razón; esta
+     función la estaba saltando por detrás. Con el `put` sin `clear`, restaurar
+     en un iPad nuevo funciona igual —la base está vacía— y lo único que deja
+     de poder hacerse es quitar movimientos.
+
+     Devuelve cuántos movimientos había antes y después, para que quien
+     restaura quede registrado y la diferencia se pueda ver. */
   async importarTodo(paquete) {
     if (!paquete || paquete.formato !== 'almacen-licores/respaldo') {
       throw new Error('El archivo no es un respaldo válido de este sistema.');
     }
     const nombres = Object.keys(paquete.datos || {}).filter((n) => n in STORES);
     if (!nombres.length) throw new Error('El respaldo no contiene datos reconocibles.');
-    return tx(nombres, 'readwrite', async (s) => {
+    if (!nombres.includes('movimientos')) nombres.push('movimientos');
+
+    const antes = (await DB.todos('movimientos')).length;
+
+    await tx(nombres, 'readwrite', async (s) => {
       for (const n of nombres) {
-        await pedir(s[n].clear());
-        for (const fila of paquete.datos[n]) await pedir(s[n].put(fila));
+        const filas = paquete.datos[n] || [];
+        if (n !== 'movimientos') await pedir(s[n].clear());
+        for (const fila of filas) await pedir(s[n].put(fila));
       }
-      return nombres.length;
     });
+
+    const despues = (await DB.todos('movimientos')).length;
+    return { stores: nombres.length, movimientosAntes: antes, movimientosDespues: despues };
   },
 };
 

@@ -1069,8 +1069,9 @@ function exportarMovimientos(movs, nombreRest) {
 async function vistaHistorial() {
   if (!rangoReporte) rangoReporte = rangoPreset('7');
   const [desde, hasta] = rangoReporte;
-  const [movs, restaurantes] = await Promise.all([
+  const [movs, restaurantes, restauraciones] = await Promise.all([
     movimientosPeriodo(desde, hasta), DB.todos('restaurantes'),
+    DB.leerConfig('restauraciones', []),
   ]);
   const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
 
@@ -1098,6 +1099,26 @@ async function vistaHistorial() {
   const grupos = [...lotes.values()];
 
   return el('div', {}, [
+    /* Va arriba del historial y no escondido en Sistema: quien viene a leer
+       este registro como evidencia es justo quien tiene que enterarse de que
+       alguien restauró un respaldo, porque es la única operación que puede
+       cambiar lo que hay aquí. */
+    restauraciones.length ? el('div', { clase: 'aviso-banda' }, [
+      el('div', { clase: 'crece' }, [
+        el('b', {
+          texto: restauraciones.length === 1
+            ? 'Se restauró un respaldo en este iPad'
+            : `Se restauraron ${restauraciones.length} respaldos en este iPad`,
+        }),
+        el('span', {
+          texto: restauraciones.slice(-3).reverse().map((r) => (
+            `${fechaHoraPR(r.fechaISO)} · ${r.gerente} · el historial pasó de ${r.movimientosAntes} a ${r.movimientosDespues} movimientos`
+          )).join('\n'),
+          estilo: { whiteSpace: 'pre-line' },
+        }),
+      ]),
+    ]) : null,
+
     seccion('Historial de movimientos',
       'Cada fila es una operación completa: quién, cuándo y para qué restaurante. Tócala para ver qué se llevó. '
       + 'Registro sin borrar: una corrección no elimina nada, suma una reversión que también queda aquí.',
@@ -1118,7 +1139,7 @@ async function vistaHistorial() {
         ? tabla(['Fecha y hora', 'Tipo', 'Quién', 'Restaurante', 'Se llevó', 'Motivo', ''],
           grupos.slice(0, 300).flatMap((g) => filaLote(g, nombreRest)))
         : el('p', { clase: 'vacio', texto: 'No hay movimientos en este período.' })),
-  ]);
+  ].filter(Boolean));
 }
 
 /* Una operación = una fila, no una fila por botella.
@@ -1391,11 +1412,20 @@ async function exportarRespaldo() {
     const paquete = await DB.exportarTodo();
     descargar(`respaldo-almacen-${fechaPR()}.json`, JSON.stringify(paquete, null, 2));
     await DB.escribirConfig('ultimo_respaldo', new Date().toISOString());
+    /* Este aviso decía «mándalo por correo». El archivo lleva los nombres del
+       personal, el historial completo y los códigos cifrados de todos —y con
+       una sal compartida, un solo recorrido de las 100.000 combinaciones de 5
+       dígitos los rompe todos a la vez: medido, 37 minutos en una laptop
+       normal. Quien tenga el archivo sabe el código de cada empleado, y con eso
+       se sacan botellas a nombre de otro, que es justo lo que este sistema
+       existe para impedir. El correo deja copias en servidores ajenos para
+       siempre. */
     brindis({
       texto: 'Respaldo generado',
-      sub: 'Guárdalo en iCloud Drive o mándalo por correo. Si se queda solo en este iPad, no es un respaldo.',
+      sub: 'Guárdalo en el iCloud Drive del negocio. No lo mandes por correo ni por WhatsApp: '
+        + 'el archivo lleva los datos del personal y sus códigos.',
       tipo: 'exito',
-      segundos: 9,
+      segundos: 10,
     });
     if (ctx) render();
   } catch (e) {
@@ -1580,15 +1610,33 @@ async function vistaSistema() {
           if (!f) { brindis({ texto: 'Escoge primero un archivo', tipo: 'error' }); return; }
           if (!await confirmar({
             titulo: 'Restaurar respaldo',
-            mensaje: 'Se va a borrar todo lo que hay ahora en este iPad (inventario, empleados e historial) y se reemplaza por el contenido del archivo. Esto no se puede deshacer.',
+            mensaje: 'Se reemplaza el inventario, el catálogo y los empleados de este iPad por los del archivo. '
+              + 'El historial de movimientos no se reemplaza: solo se le suma lo que traiga el archivo, '
+              + 'porque es lo que sirve de evidencia. La restauración queda registrada con tu nombre.',
             textoSi: 'Restaurar',
             peligro: true,
           })) return;
           try {
             const paquete = JSON.parse(await f.text());
-            await DB.importarTodo(paquete);
+            const r = await DB.importarTodo(paquete);
+            /* Queda anotado quién restauró y cuántos movimientos había antes y
+               después. Sin esto, una restauración es indistinguible de que no
+               hubiera pasado nada, y es la operación con más poder del sistema. */
+            const previas = await DB.leerConfig('restauraciones', []);
+            await DB.escribirConfig('restauraciones', [...previas, {
+              fechaISO: new Date().toISOString(),
+              gerente: ctx.gerente.nombre,
+              archivo: f.name,
+              movimientosAntes: r.movimientosAntes,
+              movimientosDespues: r.movimientosDespues,
+            }].slice(-50));
             await ctx.refrescarCache();
-            brindis({ texto: 'Respaldo restaurado', tipo: 'exito' });
+            brindis({
+              texto: 'Respaldo restaurado',
+              sub: `El historial pasó de ${r.movimientosAntes} a ${r.movimientosDespues} movimientos. Queda anotado a tu nombre.`,
+              tipo: 'exito',
+              segundos: 8,
+            });
             render();
           } catch (e) {
             brindis({ texto: 'No se pudo restaurar', sub: e.message, tipo: 'error', segundos: 10 });

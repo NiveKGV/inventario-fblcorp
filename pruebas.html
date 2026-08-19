@@ -311,6 +311,44 @@ igual(M.porProducto(soloDevuelto)[0].unidades, 3,
 igual(M.porProducto(soloDevuelto)[0].valor, 90, 'El valor a costo acompaña al consumo: 3 x $30');
 
 /* ------------------------------------------------------------------ */
+seccion('El respaldo no puede borrar historial');
+
+/* Hallazgo de seguridad real: el archivo de respaldo es JSON legible, y
+   `importarTodo` vaciaba TODOS los stores antes de escribir. Bastaba con
+   exportar, quitar a mano la línea de una salida incómoda, cuadrar la
+   existencia del producto y restaurar: la salida desaparecía y el inventario
+   cuadraba solo, sin reversión ni nota. `DB.borrar` ya se negaba a borrar
+   movimientos; esta puerta lo saltaba por detrás. */
+const paraRespaldo = await producto('Para respaldo', 10);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: paraRespaldo.id, cantidad: 2 }], ...EMP, restauranteId: REST,
+});
+const copiaSeg = await DB.exportarTodo();
+const movsAntesResp = (await DB.todos('movimientos')).length;
+
+// El ataque: se le quita al respaldo la salida y se cuadra la existencia.
+const salidaVictima = copiaSeg.datos.movimientos.find((m) => m.productoId === paraRespaldo.id);
+copiaSeg.datos.movimientos = copiaSeg.datos.movimientos.filter((m) => m.id !== salidaVictima.id);
+copiaSeg.datos.productos.find((p) => p.id === paraRespaldo.id).existencia = salidaVictima.existenciaAntes;
+
+const resRestaurar = await DB.importarTodo(copiaSeg);
+const movsDespuesResp = await DB.todos('movimientos');
+
+anotar(movsDespuesResp.some((m) => m.id === salidaVictima.id),
+  'Restaurar un respaldo con una salida borrada NO la borra del historial');
+igual(movsDespuesResp.length, movsAntesResp,
+  'El historial no pierde movimientos al restaurar un respaldo recortado');
+igual([resRestaurar.movimientosAntes, resRestaurar.movimientosDespues], [movsAntesResp, movsAntesResp],
+  'La restauración informa cuántos movimientos había antes y después, para poder auditarla');
+
+// Y lo que el arreglo no podía romper: restaurar sí repone todo lo demás.
+await DB.vaciar('productos');
+igual((await DB.todos('productos')).length, 0, 'Punto de partida: sin productos, como un iPad nuevo');
+await DB.importarTodo(copiaSeg);
+anotar((await DB.todos('productos')).length > 0,
+  'Restaurar en un iPad vacío sigue reponiendo el catálogo completo');
+
+/* ------------------------------------------------------------------ */
 seccion('Reversiones');
 
 const revertible = await producto('Revertible', 20);

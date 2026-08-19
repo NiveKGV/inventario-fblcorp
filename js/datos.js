@@ -4,6 +4,7 @@
    vez que entra, con el gerente presente. */
 
 import { nuevoId } from './db.js';
+import { codigoDebil, LARGO_CODIGO } from './cripto.js';
 
 const RESTAURANTES = [
   { id: 'la-madre', nombre: 'La Madre', color: '#e0a34a', orden: 1, activo: true },
@@ -102,19 +103,25 @@ const CATALOGO = [
   ['Dolin Dry Vermut', 'otros', '750 ml', 2, 6, 3, 16.00],
 ];
 
-/* Los códigos de prueba son distintos entre sí a propósito: el sistema
-   identifica a la persona solo por el código, así que dos iguales le cargarían
-   las botellas a la equivocada. Se muestran una vez al configurar y después
-   quedan cifrados como cualquier otro. */
+/* Los empleados de prueba ya NO traen su código escrito aquí.
+
+   Antes eran ocho códigos fijos en texto claro —40317, 52846, y así— dentro de
+   un repositorio público. La pantalla de instalación trae «Cargar catálogo de
+   ejemplo» marcado por omisión, así que en cualquier instalación donde nadie
+   los desactivara, quien encontrara el repositorio tenía ocho códigos válidos y
+   solo le faltaba un minuto a solas con el iPad.
+
+   Ahora se sortean al instalar y se enseñan una sola vez, como los de verdad.
+   Lo que está publicado ya no sirve de nada. */
 const EMPLEADOS_EJEMPLO = [
-  ['Carlos Vázquez', 'la-madre', '40317'],
-  ['María Rivera', 'la-madre', '52846'],
-  ['José Colón', 'la-o', '61930'],
-  ['Ana Rosado', 'la-o', '27584'],
-  ['Luis Ortiz', 'la-grieta', '83162'],
-  ['Sofía Delgado', 'la-grieta', '19475'],
-  ['Pedro Santiago', 'el-mas-alla', '70629'],
-  ['Gabriela Nieves', 'el-mas-alla', '35091'],
+  ['Carlos Vázquez', 'la-madre'],
+  ['María Rivera', 'la-madre'],
+  ['José Colón', 'la-o'],
+  ['Ana Rosado', 'la-o'],
+  ['Luis Ortiz', 'la-grieta'],
+  ['Sofía Delgado', 'la-grieta'],
+  ['Pedro Santiago', 'el-mas-alla'],
+  ['Gabriela Nieves', 'el-mas-alla'],
 ];
 
 function productosIniciales() {
@@ -134,16 +141,37 @@ function productosIniciales() {
   }));
 }
 
+/* Un código de 5 dígitos sorteado con el generador criptográfico del navegador,
+   no con Math.random: este código es lo único que separa a una persona de las
+   botellas de otra, y Math.random es predecible.
+
+   Se rechazan los débiles con la misma regla que los códigos reales —repetidos,
+   secuencias, los de siempre— para que un empleado de prueba no acabe con un
+   código más fácil de adivinar que el del personal. */
+function codigoSorteado(yaUsados) {
+  for (let intento = 0; intento < 500; intento++) {
+    const n = crypto.getRandomValues(new Uint32Array(1))[0] % 100000;
+    const codigo = String(n).padStart(LARGO_CODIGO, '0');
+    if (!codigoDebil(codigo) && !yaUsados.has(codigo)) { yaUsados.add(codigo); return codigo; }
+  }
+  throw new Error('No se pudo generar un código de ejemplo distinto.');
+}
+
 /* Devuelve los empleados con `codigoVisible` en claro. Quien llame a esta
-   función tiene que cifrarlo y quitar ese campo antes de guardar. */
+   función tiene que cifrarlo y quitar ese campo antes de guardar.
+
+   Los códigos se sortean en cada instalación: son distintos entre sí porque el
+   sistema identifica a la persona solo por el código, y dos iguales le
+   cargarían las botellas a la equivocada. */
 function empleadosEjemplo() {
-  return EMPLEADOS_EJEMPLO.map(([nombre, restauranteId, codigoVisible]) => ({
+  const usados = new Set();
+  return EMPLEADOS_EJEMPLO.map(([nombre, restauranteId]) => ({
     id: nuevoId('e'),
     nombre,
     restauranteId,
     rol: 'empleado',
     codigo: null,
-    codigoVisible,
+    codigoVisible: codigoSorteado(usados),
     activo: true,
     ejemplo: true,
     creado: new Date().toISOString(),
