@@ -182,6 +182,43 @@ const movEscaso = (await DB.porIndice('movimientos', 'porProducto', escaso.id))[
 igual(movEscaso.autorizadoPor, 'Kevin Prieto', 'Queda registrado quién autorizó la excepción');
 
 /* ------------------------------------------------------------------ */
+seccion('Origen del movimiento');
+
+/* La salida es el único movimiento con dos puertas: el panel del empleado, que
+   resuelve el restaurante por el código, y la salida manual de gerencia, donde
+   el gerente lo escoge. Si el historial no las distingue, la segunda se lee
+   igual que la primera y deja de servir como evidencia. */
+const porGerencia = await producto('Por gerencia', 10);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: porGerencia.id, cantidad: 2 }],
+  empleadoId: 'g1', empleadoNombre: 'Ana Serrano',
+  restauranteId: REST, motivo: 'Bajé una caja al servicio', origen: 'admin',
+});
+const movGer = (await DB.porIndice('movimientos', 'porProducto', porGerencia.id))[0];
+igual(movGer.origen, 'admin', 'La salida manual queda marcada como hecha desde gerencia');
+igual(movGer.restauranteId, REST, 'La salida manual se le carga al restaurante escogido');
+igual(movGer.delta, -2, 'La salida manual descuenta del almacén igual que cualquier salida');
+
+const porPanel = await producto('Por panel', 10);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: porPanel.id, cantidad: 2 }], ...EMP, restauranteId: REST,
+});
+igual((await DB.porIndice('movimientos', 'porProducto', porPanel.id))[0].origen, 'empleado',
+  'La salida del panel del empleado no se marca como de gerencia');
+
+/* Revertir solo se puede desde Administración. El espejo se construye con
+   `...orig`, así que sin una línea explícita heredaría el origen del
+   movimiento revertido y diría que la corrección la hizo un mesero. */
+const loteEmpleado = (await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: porPanel.id, cantidad: 1 }], ...EMP, restauranteId: REST,
+})).loteId;
+await M.revertirLote(loteEmpleado, { ...EMP, motivo: 'Corrección desde gerencia' });
+const espejoOrigen = (await DB.porIndice('movimientos', 'porProducto', porPanel.id))
+  .find((m) => m.tipo === 'reversion');
+igual(espejoOrigen.origen, 'admin',
+  'La reversión se marca como de gerencia y no hereda el origen del movimiento revertido');
+
+/* ------------------------------------------------------------------ */
 seccion('Atomicidad del lote');
 
 const buenoA = await producto('Bueno A', 10);
@@ -250,7 +287,11 @@ await M.registrarLote({
 });
 igual(await existenciaDe(devuelto.id), 2, 'La devolución suma de vuelta al almacén');
 
-const hoy = M.fechaPR();
+/* Ojo con la fecha: los movimientos se archivan por DÍA OPERATIVO, que arranca
+   a las 5:00 a.m. Usar fechaPR() aquí hacía que esta prueba fallara cuando se
+   corría entre medianoche y las 5 a.m. — a esa hora el día operativo es el
+   anterior, la consulta no encontraba nada y reventaba en [0].unidades. */
+const hoy = M.diaOperativo(new Date(), 5);
 const movsHoy = await M.movimientosPeriodo(hoy, hoy);
 const soloDevuelto = movsHoy.filter((m) => m.productoId === devuelto.id);
 igual(M.porProducto(soloDevuelto)[0].unidades, 3,
@@ -339,8 +380,22 @@ anotar(rest.length === 1 && rest[0].clave === REST,
   'El reporte agrupa todo el consumo bajo el restaurante correcto',
   rest.length === 1 ? '' : `salieron ${rest.length} grupos`);
 
+/* Antes esto exigía que el período tuviera un solo empleado. Dejó de ser
+   cierto cuando la gerencia pudo registrar salidas manuales, y contar cuántas
+   personas hay nunca fue lo que esta prueba quería comprobar: lo que importa
+   es que a cada quien se le carguen sus botellas y las de nadie más. */
 const emp = M.porEmpleado(await M.movimientosPeriodo(hoy, hoy));
-anotar(emp.length === 1 && emp[0].clave === 'e1', 'El reporte por empleado atribuye todo a quien lo sacó');
+const movsHoyTodos = await M.movimientosPeriodo(hoy, hoy);
+anotar(emp.every((e) => {
+  // Solo lo que va a un restaurante: las entradas y los ajustes no son consumo
+  // de nadie, y `agregar` los descarta por eso mismo.
+  const suyas = movsHoyTodos
+    .filter((m) => m.empleadoId === e.clave && m.restauranteId)
+    .reduce((s, m) => s + (-m.delta), 0);
+  return e.unidades === suyas;
+}), 'El reporte por empleado atribuye a cada quien exactamente sus botellas');
+anotar(emp.some((e) => e.clave === 'e1') && emp.some((e) => e.clave === 'g1'),
+  'El empleado y la gerencia salen como filas distintas, no mezclados');
 
 const fuera = await M.movimientosPeriodo(M.sumarDias(hoy, -40), M.sumarDias(hoy, -30));
 igual(fuera.length, 0, 'Un período sin actividad devuelve vacío, no todo el historial');

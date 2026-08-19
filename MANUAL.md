@@ -18,7 +18,7 @@ usarse. Las apps añadidas a la pantalla de inicio están fuera de esa regla.
 Si lo usan como pestaña de Safari, un fin de semana largo puede costarles el
 inventario completo.
 
-Esto no sustituye el respaldo (punto 8). Nada de lo que hace iOS por su cuenta
+Esto no sustituye el respaldo (punto 9). Nada de lo que hace iOS por su cuenta
 es una copia de seguridad que puedas dar por garantizada.
 
 ---
@@ -46,16 +46,20 @@ mercancía ni sacar reportes.
 2. Busca el licor escribiendo el nombre, o escoge la **categoría** (Whisky, Ron,
    Vino…) y toca las botellas que se lleva.
 3. Escoge la cantidad de cada una. Puede juntar varias en un solo viaje.
-4. Toca **Confirmar salida**.
+4. Toca **Confirmar salida**. Sale una pantalla con la lista de lo que se
+   lleva, su nombre y su restaurante. **Ahí se revisa antes de registrar.** Si
+   algo está mal, toca **Revisar** y vuelve al panel a corregirlo.
+5. Toca **Sí, registrar**.
 
 Listo. El inventario baja solo y queda registrado quién, de qué restaurante, qué
 se llevó y a qué hora.
 
-Si se equivocó, tiene **15 segundos** para tocar **Deshacer**. Después de eso lo
-corrige el gerente desde el Historial.
+**Una vez registrado, el empleado no lo puede deshacer.** Si se equivocó, lo
+corrige un gerente desde el Historial con el botón **Revertir**. Por eso la
+pantalla de confirmación muestra la lista completa: es el momento de mirarla.
 
-**La sesión se cierra sola al minuto de no tocar nada.** Es a propósito: así
-nadie saca botellas a nombre de otro.
+**La sesión se cierra sola a los tres minutos de no tocar nada.** Es a propósito:
+así nadie saca botellas a nombre de otro.
 
 ### El buscador
 
@@ -64,11 +68,19 @@ Silver aunque no se escriba la tilde; escribiendo "don julio" aparecen los dos;
 escribiendo "ron" aparece la categoría completa y escribiendo "caja", las
 cervezas. Para volver a las categorías, se toca **Limpiar** o cualquier categoría.
 
-### Cambiar el código
+### Los códigos los maneja la gerencia
 
-El gerente asigna el primer código. Cada empleado debería cambiarlo por uno que
-solo él conozca, desde **Cambiar mi código** en el panel. Hasta que lo haga, el
-gerente conoce su código — dilo claro cuando entrenes al personal.
+**El empleado no puede cambiar su propio código.** Los asigna y los cambia un
+gerente, desde **Administración → Empleados**.
+
+Eso tiene una consecuencia que conviene decir en voz alta al entrenar al
+personal: **la gerencia conoce el código de cada quien.** El sistema registra
+con certeza desde qué código salió cada botella, pero no puede probar que quien
+lo tecleó fue su dueño. Sirve para saber a quién preguntarle, no para acusar a
+nadie por sí solo.
+
+Si alguien sospecha que otro sabe su código, se le pide al gerente que lo
+cambie. Toma diez segundos.
 
 Dos personas **no pueden tener el mismo código**. El sistema no lo permite,
 porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
@@ -80,8 +92,8 @@ porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
 | Color | Qué significa |
 |---|---|
 | Verde | Hay suficiente |
-| Amarillo | Va bajando, está por debajo de lo que debería haber |
-| Rojo | Hay que ordenar ya |
+| Amarillo | Va bajando: está por debajo del **máximo** |
+| Rojo | Llegó al **mínimo**. Hay que ordenar ya |
 | Gris | Agotado |
 
 ---
@@ -92,7 +104,8 @@ Para montar el catálogo de golpe, o para añadir muchos productos de una vez, n
 hay que entrarlos uno por uno.
 
 1. Llena la plantilla de Excel: producto, categoría, tamaño, costo, existencia
-   de hoy y **cuánto se pide en un mes típico** de cada uno.
+   de hoy y **cuánto se pide en un mes típico** de cada uno. Con ese último
+   dato el sistema calcula solo el máximo y el mínimo.
 2. En Excel: **Archivo → Guardar como → CSV**, parado en la hoja «Catálogo».
 3. Guarda el archivo en iCloud Drive.
 4. En el iPad: **Administración → Sistema → Importar catálogo**, escoge el
@@ -106,9 +119,9 @@ Tres cosas que conviene saber:
 - **No borra nada.** Un producto que no aparezca en el archivo se queda igual.
 - **A los productos que ya existen no les cambia la existencia**, solo el costo,
   el tamaño y los niveles. La existencia la manda el inventario, no una hoja.
-- **Los niveles par se calculan solos** con el pedido mensual. Si prefieres
-  fijarlos a mano en algún producto, llena las columnas Par y Reorden y esas
-  mandan.
+- **El máximo y el mínimo se calculan solos** con el pedido mensual. Si
+  prefieres fijarlos a mano en algún producto, llena las columnas Máximo y
+  Mínimo y esas mandan.
 
 ---
 
@@ -134,6 +147,8 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
 
 1. **Administración → Conteo físico.**
 2. Cuenta las botellas de verdad y escribe el número en la columna **Contado**.
+   Cuenta antes de abrir y no en medio del servicio, y ve por estante y no
+   siguiendo la lista: siguiendo la lista se salta lo que no está donde debería.
 3. Solo escribe donde haya diferencia. Lo que no toques, no se cambia.
 4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar**.
 
@@ -141,7 +156,36 @@ La diferencia queda guardada con tu nombre. Nada se borra nunca.
 
 ---
 
-## 8. El respaldo — lo más importante de este manual
+## 8. Cuando el licor lo baja la gerencia
+
+Tu código de gerencia te lleva directo a Administración, no al panel de salidas.
+Así que si eres tú quien baja una caja a uno de los restaurantes, no puedes
+registrarla como lo hace un empleado.
+
+**No uses el conteo físico para eso.** El conteo iguala el almacén a la realidad,
+pero no le carga esas botellas a ningún restaurante: desaparecen del almacén sin
+aparecer en el consumo de nadie, y el reparto de costos entre los cuatro locales
+te queda corto ese mes.
+
+Usa **Administración → Salida manual**:
+
+1. Escoge el restaurante que se lleva el licor.
+2. Escribe el motivo. Es obligatorio.
+3. Busca los productos y pon las cantidades.
+4. Revisa la lista en la confirmación y toca **Sí, registrar**.
+
+Descuenta del almacén y se lo carga a ese restaurante, igual que una salida
+normal. En el Historial y en los reportes queda con la etiqueta **«Desde
+gerencia»**, para que se distinga de las que registra el personal con su código:
+en el panel del empleado nadie escoge el restaurante —el código lo determina—,
+y acá sí. Quien revise los números después tiene derecho a saber cuál es cuál.
+
+Si el sistema dice que no hay suficiente, **no insistas por aquí**. Quiere decir
+que el conteo del sistema está mal: corrígelo en Conteo físico y vuelve.
+
+---
+
+## 9. El respaldo — lo más importante de este manual
 
 **Todo vive dentro de ese iPad.** Si el iPad se pierde, se cae o alguien borra la
 app, se va el inventario y el historial completo. No hay copia en ninguna nube.
@@ -160,7 +204,7 @@ Para recuperar todo en un iPad nuevo: **Sistema → Restaurar un respaldo**.
 
 ---
 
-## 9. Los reportes
+## 10. Los reportes
 
 **Administración → Reportes.** Escoge el período y verás:
 
@@ -182,7 +226,7 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 
 ---
 
-## 10. Cosas que conviene saber
+## 11. Cosas que conviene saber
 
 - **Un código de 5 dígitos dice quién fue, no impide que alguien use el de otro.**
   Si alguien ve el código de un compañero, puede usarlo. Que cada quien lo
@@ -195,8 +239,12 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 - Si un empleado intenta sacar más de lo que el sistema dice que hay, se detiene
   y pide autorización de un gerente. No es un error del sistema: es que el
   conteo no cuadra y hay que arreglarlo con un conteo físico.
-- El **nivel par** es cuánto debe haber de cada licor. Ponlo pensando en cuánto
-  tarda el proveedor: si tarda una semana, el par tiene que cubrir el consumo de
-  los cuatro restaurantes durante esa semana, más un colchón. En el Inventario
-  aparece el consumo promedio semanal real para que ese número no sea a ojo.
+- Cada licor tiene dos números. El **máximo** es cuánto debe haber con el
+  almacén completo, y es hasta donde repone la lista de compra. El **mínimo** es
+  el número al que hay que pedir ya, y es cuando el producto se pone en rojo. El
+  inventario baja del máximo todo el tiempo: eso es normal, y es justamente lo
+  que arma la lista de compra. Pon el máximo pensando en cuánto tarda el
+  proveedor: si tarda una semana, tiene que cubrir el consumo de los cuatro
+  restaurantes durante esa semana más un colchón. En el Inventario aparece el
+  consumo promedio semanal real para que ese número no sea a ojo.
 - Cuando des de baja a un empleado, todo lo que sacó se conserva en el historial.

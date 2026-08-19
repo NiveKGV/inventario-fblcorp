@@ -118,8 +118,10 @@ function mapearColumnas(encabezados) {
   encabezados.forEach((cru, i) => {
     const k = clave(cru);
     if (!k) return;
-    if (k === 'par' && mapa.par === undefined) { mapa.par = i; return; }
-    if (k.startsWith('reorden') || k === 'puntodereorden') { mapa.reorden = i; return; }
+    /* «Máximo» y «Mínimo» son los nombres actuales; «Par» y «Reorden» se
+       siguen aceptando porque hay plantillas repartidas con esos títulos. */
+    if ((k === 'par' || k.startsWith('maximo')) && mapa.par === undefined) { mapa.par = i; return; }
+    if (k.startsWith('minimo') || k.startsWith('reorden') || k === 'puntodereorden') { mapa.reorden = i; return; }
     for (const [campo, alias] of Object.entries(ALIAS)) {
       if (mapa[campo] === undefined && alias.some((a) => k.includes(a))) { mapa[campo] = i; return; }
     }

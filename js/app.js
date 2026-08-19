@@ -15,7 +15,7 @@ import {
 } from './cripto.js';
 import { RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo } from './datos.js';
 import {
-  estadoStock, registrarLote, revertirLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
+  estadoStock, registrarLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
@@ -23,10 +23,17 @@ import {
 } from './ui.js';
 import { abrirAdmin, salirAdmin } from './admin.js';
 
-const INACTIVIDAD_EMPLEADO = 60;   // segundos
+/* Tres minutos. Antes era 1 minuto y cortaba a gente que estaba escogiendo
+   botellas con las manos ocupadas. El cierre automático sigue existiendo por
+   la misma razón de siempre: que nadie saque licor a nombre de otro porque
+   el anterior dejó la sesión abierta. */
+const INACTIVIDAD_EMPLEADO = 180;  // segundos
 const INACTIVIDAD_GERENTE = 300;   // el gerente captura datos, 60 s no alcanza
 const INTENTOS_MAX = 5;
-const SEG_DESHACER = 15;
+/* Segundos que se queda el aviso de confirmación en pantalla. Antes esta
+   constante era la ventana para deshacer; ahora la corrección va por el
+   gerente y esto solo controla cuánto dura el mensaje. */
+const SEG_AVISO = 6;
 
 const estado = {
   restaurantes: [],
@@ -206,7 +213,7 @@ async function mostrarAcceso() {
 
   const alertas = await resumenAlertas();
   $('#pie-info').textContent = alertas.porOrdenar > 0
-    ? `${alertas.porOrdenar} ${alertas.porOrdenar === 1 ? 'producto está' : 'productos están'} bajo el nivel par`
+    ? `${alertas.porOrdenar} ${alertas.porOrdenar === 1 ? 'producto está' : 'productos están'} bajo su máximo`
     : 'Todo el inventario está en nivel';
 
   mostrarPantalla('acceso');
@@ -394,7 +401,6 @@ async function abrirPanel(empleado, restaurante) {
   $('#panel-sub').textContent = empleado.nombre;
   $('#panel-punto').style.background = restaurante.color;
   $('#btn-salir').onclick = () => mostrarAcceso();
-  $('#btn-codigo').onclick = () => modalCambiarCodigo(empleado);
   $('#btn-confirmar').onclick = confirmarSalida;
   $('#btn-vaciar').onclick = () => { estado.carrito.clear(); pintarCarrito(); pintarProductos(); };
 
@@ -581,9 +587,57 @@ function pintarCarrito() {
   $('#btn-confirmar').textContent = total ? `Confirmar salida de ${total}` : 'Confirmar salida';
 }
 
+/* Confirmación antes de registrar.
+
+   Sustituyó al botón "Deshacer" que aparecía 15 segundos después. El cambio
+   es a propósito: revisar la lista antes de registrar evita el error, mientras
+   que deshacer solo lo corrige — y solo si la persona se dio cuenta a tiempo,
+   con el bar por abrir. Lo que se pierde es la red de seguridad: a partir de
+   ahora un error registrado lo corrige un gerente desde el Historial.
+
+   Por eso la lista se muestra completa, con el nombre de quien saca y su
+   restaurante. Un modal que solo dijera "¿Confirmar?" se tocaría sin leer y
+   no evitaría nada. */
+function confirmarAntes(lineas) {
+  const total = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const filas = lineas.map((l) => {
+    const p = estado.productos.find((x) => x.id === l.productoId);
+    return el('div', { clase: 'linea-confirmar' }, [
+      el('span', { clase: 'n', texto: p ? p.nombre : 'Producto' }),
+      el('span', { clase: 'q', texto: `${l.cantidad}` }),
+    ]);
+  });
+
+  return new Promise((resolver) => {
+    let decidido = false;
+    const responder = (v) => { if (!decidido) { decidido = true; resolver(v); } };
+
+    abrirModal({
+      titulo: `¿Sacar ${total} ${total === 1 ? 'botella' : 'botellas'}?`,
+      subtitulo: `Queda registrado a nombre de ${estado.empleado.nombre} · ${estado.restaurante.nombre}. `
+        + 'Revisa la lista: una vez registrado, solo un gerente puede corregirlo.',
+      contenido: el('div', { clase: 'lista-confirmar' }, filas),
+      botones: [
+        { texto: 'Revisar', accion: () => { responder(false); cerrarModal(); } },
+        {
+          texto: 'Sí, registrar',
+          clase: 'btn-primario',
+          // Se responde ANTES de cerrar: cerrarModal dispara alCerrar, y si se
+          // hiciera al revés ese alCerrar resolvería en false y la salida
+          // nunca se registraría.
+          accion: () => { responder(true); cerrarModal(); },
+        },
+      ],
+      alCerrar: () => responder(false),
+    });
+  });
+}
+
 async function confirmarSalida() {
   const lineas = [...estado.carrito.entries()].map(([productoId, cantidad]) => ({ productoId, cantidad }));
   if (!lineas.length) return;
+
+  if (!await confirmarAntes(lineas)) return;
 
   const faltantes = lineas.filter((l) => {
     const p = estado.productos.find((x) => x.id === l.productoId);
@@ -618,9 +672,6 @@ async function confirmarSalida() {
 
     const total = lineas.reduce((s, l) => s + l.cantidad, 0);
     // Se capturan ANTES de volver a la pantalla de acceso, que limpia la sesión.
-    // Si la reversión se registrara a nombre de "sistema", el reporte por
-    // empleado mostraría botellas que la persona en realidad devolvió.
-    const idEmpleado = estado.empleado.id;
     const nombreEmpleado = estado.empleado.nombre;
     const nombreRest = estado.restaurante.nombre;
 
@@ -628,97 +679,13 @@ async function confirmarSalida() {
       texto: `${total} ${total === 1 ? 'botella registrada' : 'botellas registradas'}`,
       sub: `${nombreRest} · ${nombreEmpleado} · ${fechaHoraPR(new Date())}`,
       tipo: 'exito',
-      segundos: SEG_DESHACER,
-      accion: {
-        texto: 'Deshacer',
-        fn: async () => {
-          try {
-            await revertirLote(loteId, {
-              empleadoId: idEmpleado,
-              empleadoNombre: nombreEmpleado,
-              motivo: 'Deshecho por el empleado dentro de los 15 segundos',
-            });
-            brindis({ texto: 'Salida deshecha', sub: 'Queda registrada la corrección.', tipo: 'exito' });
-          } catch (e) {
-            brindis({ texto: 'No se pudo deshacer', sub: e.message, tipo: 'error', segundos: 8 });
-          }
-        },
-      },
+      segundos: SEG_AVISO,
     });
     mostrarAcceso();
   } catch (e) {
     brindis({ texto: 'No se registró la salida', sub: e.message, tipo: 'error', segundos: 8 });
     $('#btn-confirmar').disabled = false;
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* Cambio de código por el propio empleado                             */
-/* ------------------------------------------------------------------ */
-
-function modalCambiarCodigo(empleado) {
-  const actual = el('input', {
-    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
-    placeholder: '•'.repeat(LARGO_CODIGO),
-  });
-  const nuevo = el('input', {
-    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
-    placeholder: '•'.repeat(LARGO_CODIGO),
-  });
-  const repite = el('input', {
-    type: 'password', inputmode: 'numeric', maxlength: String(LARGO_CODIGO), autocomplete: 'off',
-    placeholder: '•'.repeat(LARGO_CODIGO),
-  });
-  const err = el('p', { clase: 'mensaje-error' });
-
-  abrirModal({
-    titulo: 'Cambiar mi código',
-    subtitulo: 'El gerente te asignó el primero. Cámbialo por uno que solo tú conozcas: '
-      + 'todo lo que saques queda a tu nombre.',
-    contenido: el('div', {}, [
-      el('div', { clase: 'campo' }, [el('label', { texto: 'Código actual' }), actual]),
-      el('div', { clase: 'campo' }, [el('label', { texto: `Código nuevo (${LARGO_CODIGO} dígitos)` }), nuevo]),
-      el('div', { clase: 'campo' }, [el('label', { texto: 'Repite el nuevo' }), repite]),
-      err,
-    ]),
-    botones: [
-      { texto: 'Cancelar', accion: cerrarModal },
-      {
-        texto: 'Guardar',
-        clase: 'btn-primario',
-        accion: async () => {
-          const patron = new RegExp(`^\\d{${LARGO_CODIGO}}$`);
-          if (!patron.test(nuevo.value.trim())) {
-            err.textContent = `El código nuevo debe tener ${LARGO_CODIGO} dígitos.`; return;
-          }
-          if (nuevo.value.trim() !== repite.value.trim()) {
-            err.textContent = 'Los dos códigos nuevos no coinciden.'; return;
-          }
-          if (codigoDebil(nuevo.value.trim())) {
-            err.textContent = 'Ese código es demasiado fácil de adivinar.'; return;
-          }
-          const sal = await DB.leerConfig('sal_codigos', null);
-          const hashActual = await derivarCodigo(actual.value.trim(), sal);
-          if (!igualesConstante(hashActual, empleado.codigo)) {
-            err.textContent = 'El código actual no es correcto.'; return;
-          }
-          const hashNuevo = await derivarCodigo(nuevo.value.trim(), sal);
-          const todos = await DB.todos('empleados');
-          if (todos.some((e) => e.id !== empleado.id && e.activo && e.codigo
-            && igualesConstante(e.codigo, hashNuevo))) {
-            err.textContent = 'Ese código ya lo tiene otra persona. Escoge otro.'; return;
-          }
-          const guardado = { ...empleado, codigo: hashNuevo };
-          await DB.guardar('empleados', guardado);
-          estado.empleado = guardado;
-          await cargarCache();
-          cerrarModal();
-          brindis({ texto: 'Código cambiado', sub: 'Ahora solo tú lo conoces.', tipo: 'exito', segundos: 6 });
-        },
-      },
-    ],
-  });
-  setTimeout(() => actual.focus(), 60);
 }
 
 /* ------------------------------------------------------------------ */

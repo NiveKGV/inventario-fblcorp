@@ -16,14 +16,15 @@ const CATEGORIAS = [
   { id: 'whisky', nombre: 'Whisky', color: '#c98c3c', orden: 1, activa: true },
   { id: 'vodka', nombre: 'Vodka', color: '#5aa9d6', orden: 2, activa: true },
   { id: 'ron', nombre: 'Ron', color: '#b5703c', orden: 3, activa: true },
-  { id: 'tequila', nombre: 'Tequila y Mezcal', color: '#8fae4a', orden: 4, activa: true },
-  { id: 'ginebra', nombre: 'Ginebra', color: '#4fb3a2', orden: 5, activa: true },
-  { id: 'vino-tinto', nombre: 'Vino tinto', color: '#a33f52', orden: 6, activa: true },
-  { id: 'vino-blanco', nombre: 'Vino blanco', color: '#c4b264', orden: 7, activa: true },
-  { id: 'espumoso', nombre: 'Espumoso', color: '#c9a227', orden: 8, activa: true },
-  { id: 'licores', nombre: 'Cordiales y licores', color: '#a06bbd', orden: 9, activa: true },
-  { id: 'cerveza', nombre: 'Cerveza', color: '#7e9b3e', orden: 10, activa: true },
-  { id: 'otros', nombre: 'Otros', color: '#7a8290', orden: 11, activa: true },
+  { id: 'tequila', nombre: 'Tequila', color: '#8fae4a', orden: 4, activa: true },
+  { id: 'mezcal', nombre: 'Mezcal', color: '#6f8f3a', orden: 5, activa: true },
+  { id: 'ginebra', nombre: 'Ginebra', color: '#4fb3a2', orden: 6, activa: true },
+  { id: 'vino-tinto', nombre: 'Vino tinto', color: '#a33f52', orden: 7, activa: true },
+  { id: 'vino-blanco', nombre: 'Vino blanco', color: '#c4b264', orden: 8, activa: true },
+  { id: 'espumoso', nombre: 'Espumoso', color: '#c9a227', orden: 9, activa: true },
+  { id: 'licores', nombre: 'Cordiales y licores', color: '#a06bbd', orden: 10, activa: true },
+  { id: 'cerveza', nombre: 'Cerveza', color: '#7e9b3e', orden: 11, activa: true },
+  { id: 'otros', nombre: 'Otros', color: '#7a8290', orden: 12, activa: true },
 ];
 
 /* [nombre, categoría, tamaño, existencia, par, punto de reorden, costo]
@@ -59,7 +60,7 @@ const CATALOGO = [
   ['Casamigos Blanco', 'tequila', '750 ml', 8, 8, 4, 47.00],
   ['Tres Santos', 'tequila', '750 ml', 9, 8, 4, 39.00],
   ['Herradura Reposado', 'tequila', '750 ml', 3, 6, 3, 42.00],
-  ['Del Maguey Vida Mezcal', 'tequila', '750 ml', 5, 5, 2, 38.00],
+  ['Del Maguey Vida Mezcal', 'mezcal', '750 ml', 5, 5, 2, 38.00],
 
   ['Bombay Sapphire', 'ginebra', '750 ml', 12, 10, 5, 24.00],
   ["Hendrick's", 'ginebra', '750 ml', 9, 8, 4, 36.00],

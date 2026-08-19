@@ -31,6 +31,7 @@ const TABS = [
   ['compra', 'Lista de compra'],
   ['conteo', 'Conteo físico'],
   ['devolucion', 'Devoluciones'],
+  ['salida', 'Salida manual'],
   ['reportes', 'Reportes'],
   ['historial', 'Historial'],
   ['empleados', 'Empleados'],
@@ -70,6 +71,7 @@ async function render() {
     compra: vistaCompra,
     conteo: vistaConteo,
     devolucion: vistaDevolucion,
+    salida: vistaSalidaManual,
     reportes: vistaReportes,
     historial: vistaHistorial,
     empleados: vistaEmpleados,
@@ -154,7 +156,7 @@ function modalProductos(titulo, subtitulo, lista, { conOrden = false } = {}) {
       [
         'Producto',
         { t: 'Quedan', num: true },
-        { t: 'Par', num: true },
+        { t: 'Máximo', num: true },
         ...(conOrden ? [{ t: 'Ordenar', num: true }] : []),
         'Estado',
       ],
@@ -244,7 +246,7 @@ async function vistaResumen() {
         enEstado('agotado'), { conOrden: true },
       )),
       dato(numero(alertas.criticos), 'hay que ordenar', alertas.criticos ? 'alerta' : '', () => modalProductos(
-        'Hay que ordenar', 'Llegaron al punto de reorden. Piden ya.',
+        'Hay que ordenar', 'Llegaron al mínimo. Piden ya.',
         enEstado('critico'), { conOrden: true },
       )),
       dato(numero(alertas.bajos), 'bajo el par', alertas.bajos ? 'aviso' : '', () => modalProductos(
@@ -264,8 +266,8 @@ async function vistaResumen() {
       el('button', { clase: 'btn', texto: 'Respaldar', onclick: exportarRespaldo }),
     ])),
     compra.length
-      ? seccion('Hay que ordenar', `${compra.length} ${compra.length === 1 ? 'producto está' : 'productos están'} bajo el nivel par.`,
-        tabla(['Producto', { t: 'Quedan', num: true }, { t: 'Par', num: true }, { t: 'Ordenar', num: true }, 'Estado'],
+      ? seccion('Hay que ordenar', `${compra.length} ${compra.length === 1 ? 'producto está' : 'productos están'} bajo su máximo.`,
+        tabla(['Producto', { t: 'Quedan', num: true }, { t: 'Máximo', num: true }, { t: 'Ordenar', num: true }, 'Estado'],
           compra.slice(0, 12).map((p) => el('tr', {}, [
             el('td', { texto: p.nombre }),
             el('td', { clase: 'num', texto: String(p.existencia) }),
@@ -292,8 +294,8 @@ async function vistaInventario() {
     const q = buscador.value.trim().toLowerCase();
     const lista = productos.filter((p) => !q || p.nombre.toLowerCase().includes(q));
     contenedor.replaceChildren(tabla(
-      ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Par', num: true },
-        { t: 'Reorden', num: true }, { t: 'Consumo/sem', num: true }, { t: 'Costo', num: true }, 'Estado', ''],
+      ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Máximo', num: true },
+        { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true }, { t: 'Costo', num: true }, 'Estado', ''],
       lista.map((p) => {
         const cat = categorias.find((c) => c.id === p.categoriaId);
         const cs = semanal.get(p.id) || 0;
@@ -318,7 +320,7 @@ async function vistaInventario() {
 
   return el('div', {}, [
     seccion('Catálogo del almacén',
-      'La columna Consumo/sem es el promedio real de las últimas cuatro semanas. Si el proveedor tarda una semana en entregar, el par debe cubrir al menos ese número más un colchón.',
+      'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
       el('div', { clase: 'seccion-barra' }, [
         el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [buscador]),
         el('button', { clase: 'btn btn-primario btn-chico', texto: 'Agregar producto', onclick: () => modalProducto(null) }),
@@ -355,8 +357,8 @@ async function modalProducto(producto) {
       campo('Nombre', nombre),
       el('div', { clase: 'fila-campos' }, [campo('Categoría', categoria), campo('Tamaño', tamano)]),
       el('div', { clase: 'fila-campos-3' }, [
-        campo('Nivel par', par, 'Cuánto debe haber'),
-        campo('Punto de reorden', reorden, 'Se pone en rojo aquí'),
+        campo('Máximo', par, 'Cuánto debe haber cuando el almacén está completo'),
+        campo('Mínimo', reorden, 'Al llegar aquí se pone en rojo: hay que pedir'),
         campo('Costo por unidad', costo, 'USD, opcional'),
       ]),
       esNuevo ? campo('Existencia inicial', existencia, 'Lo que hay físicamente hoy en el almacén.') : null,
@@ -394,9 +396,9 @@ async function modalProducto(producto) {
             err.textContent = `El nombre no puede pasar de ${LARGO.nombre} caracteres: no cabe en las teclas del panel ni en la lista impresa.`;
             return;
           }
-          if (!Number.isInteger(vPar) || vPar < 0) { err.textContent = 'El nivel par debe ser un entero de cero o más.'; return; }
-          if (!Number.isInteger(vReorden) || vReorden < 0) { err.textContent = 'El punto de reorden debe ser un entero de cero o más.'; return; }
-          if (vReorden > vPar) { err.textContent = 'El punto de reorden no puede ser mayor que el par: se pondría en rojo permanentemente.'; return; }
+          if (!Number.isInteger(vPar) || vPar < 0) { err.textContent = 'El máximo debe ser un entero de cero o más.'; return; }
+          if (!Number.isInteger(vReorden) || vReorden < 0) { err.textContent = 'El mínimo debe ser un entero de cero o más.'; return; }
+          if (vReorden > vPar) { err.textContent = 'El mínimo no puede ser mayor que el máximo: el producto se pondría en rojo permanentemente.'; return; }
           if (esNuevo && (!Number.isInteger(vExistencia) || vExistencia < 0)) { err.textContent = 'La existencia inicial debe ser un entero de cero o más.'; return; }
 
           const guardado = {
@@ -459,7 +461,7 @@ async function vistaCompra() {
     const items = [...filas.values()];
     contenedorTabla.replaceChildren(items.length
       ? tabla(
-        ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Par', num: true },
+        ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Máximo', num: true },
           { t: 'Sugerido', num: true }, { t: 'Recibido', num: true }, ''],
         items.map(({ producto: p, cantidad, sugerido }) => {
           const entrada = el('input', {
@@ -563,7 +565,7 @@ async function vistaCompra() {
 }
 
 function exportarCompra(lista) {
-  const filas = [['Producto', 'Existencia', 'Par', 'A ordenar', 'Costo unitario', 'Costo total']];
+  const filas = [['Producto', 'Existencia', 'Maximo', 'A ordenar', 'Costo unitario', 'Costo total']];
   for (const p of lista) filas.push([p.nombre, p.existencia, p.par, p.aOrdenar, p.costo || 0, p.costoOrden.toFixed(2)]);
   descargar(`lista-compra-${fechaPR()}.csv`, aCSV(filas), 'text/csv');
 }
@@ -731,6 +733,170 @@ async function vistaDevolucion() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Salida manual                                                       */
+/* ------------------------------------------------------------------ */
+
+/* Por qué existe: hasta ahora las botellas solo salían por el panel del
+   empleado, y un gerente no puede entrar ahí —su código lo manda directo a
+   Administración—. Si el propio gerente bajaba una caja a La Madre, lo único
+   que le reducía el inventario era el conteo físico, y ese ajuste no se le
+   carga a ningún restaurante: la botella desaparecía del almacén sin aparecer
+   en el consumo de nadie, y el reparto de costos entre los cuatro locales
+   quedaba corto.
+
+   Por qué queda marcada: acá el gerente ESCOGE el restaurante. En el panel del
+   empleado no se escoge nada, lo resuelve el código. Son dos cosas distintas y
+   el historial tiene que decirlo, o esta pantalla se convierte en la única
+   puerta para mover inventario a mano y que se lea igual que el registro
+   honesto. De ahí `origen: 'admin'` y la etiqueta en el historial.
+
+   Por qué el motivo es obligatorio aunque el modelo no lo exija para las
+   salidas: la salida de un empleado se explica sola (bajó al almacén en su
+   turno). Esta no. */
+async function vistaSalidaManual() {
+  const [productos, restaurantes] = await Promise.all([productosActivos(), DB.todos('restaurantes')]);
+  const cantidades = new Map();
+  const restaurante = el('select', {}, restaurantes.sort((a, b) => a.orden - b.orden)
+    .map((r) => el('option', { value: r.id, texto: r.nombre })));
+  const motivo = el('input', {
+    type: 'text',
+    maxlength: String(LARGO.motivo),
+    placeholder: 'Bajé una caja para el servicio de la noche…',
+  });
+  const buscador = el('input', { type: 'search', placeholder: 'Buscar producto…', autocomplete: 'off' });
+  const contenedor = el('div');
+
+  const pintar = () => {
+    const q = normalizar(buscador.value.trim());
+    const lista = productos
+      .filter((p) => !q || normalizar(`${p.nombre} ${p.tamano || ''}`).includes(q))
+      .slice(0, 40);
+    contenedor.replaceChildren(tabla(
+      ['Producto', { t: 'En almacén', num: true }, { t: 'Sacan', num: true }],
+      lista.map((p) => {
+        const entrada = el('input', {
+          type: 'number', min: '0', step: '1', max: String(p.existencia),
+          value: String(cantidades.get(p.id) || ''),
+          estilo: { width: '100px', minHeight: '48px', textAlign: 'right' },
+          oninput: () => {
+            const v = parseInt(entrada.value, 10);
+            if (Number.isInteger(v) && v > 0) cantidades.set(p.id, v); else cantidades.delete(p.id);
+          },
+        });
+        return el('tr', {}, [
+          el('td', { texto: p.nombre }),
+          el('td', { clase: 'num', texto: String(p.existencia) }),
+          el('td', { clase: 'num' }, [entrada]),
+        ]);
+      }),
+    ));
+  };
+  buscador.oninput = pintar;
+  pintar();
+
+  const registrar = async () => {
+    if (!motivo.value.trim()) { brindis({ texto: 'Falta el motivo', tipo: 'error' }); return; }
+    const lineas = [...cantidades.entries()].map(([productoId, cantidad]) => ({ productoId, cantidad }));
+    if (!lineas.length) { brindis({ texto: 'No hay cantidades', tipo: 'error' }); return; }
+
+    /* Sin existencia no se fuerza el negativo. En el panel del empleado un
+       gerente puede autorizar la excepción porque son dos personas; acá el
+       gerente se autorizaría a sí mismo y eso no es un control. Si el número
+       no cuadra, lo que está mal es el conteo. */
+    const faltan = lineas
+      .map((l) => ({ l, p: productos.find((x) => x.id === l.productoId) }))
+      .filter(({ l, p }) => p && l.cantidad > p.existencia);
+    if (faltan.length) {
+      const detalle = faltan.map(({ l, p }) => `${p.nombre}: sacas ${l.cantidad}, quedan ${p.existencia}`).join('. ');
+      brindis({
+        texto: 'No hay suficiente en el almacén',
+        sub: `${detalle}. Si el almacén sí las tiene, el conteo del sistema está mal: corrígelo en Conteo físico y vuelve.`,
+        tipo: 'error',
+        segundos: 12,
+      });
+      return;
+    }
+
+    const nombreLocal = restaurantes.find((r) => r.id === restaurante.value)?.nombre || '';
+    if (!await confirmarLineas({
+      lineas,
+      productos,
+      titulo: 'salida manual',
+      subtitulo: `Sale del almacén hacia ${nombreLocal} y queda registrado a nombre de ${ctx.gerente.nombre}, `
+        + 'marcado como salida hecha desde gerencia. Solo se corrige con una reversión, que también queda en el historial.',
+    })) return;
+
+    try {
+      await registrarLote({
+        tipo: 'salida',
+        lineas,
+        empleadoId: ctx.gerente.id,
+        empleadoNombre: ctx.gerente.nombre,
+        restauranteId: restaurante.value,
+        motivo: motivo.value.trim(),
+        origen: 'admin',
+      });
+      await ctx.refrescarCache();
+      const total = lineas.reduce((s, l) => s + l.cantidad, 0);
+      brindis({ texto: `Salida registrada: ${total} ${total === 1 ? 'botella' : 'botellas'}`, tipo: 'exito' });
+      render();
+    } catch (e) {
+      brindis({ texto: 'No se registró', sub: e.message, tipo: 'error', segundos: 8 });
+    }
+  };
+
+  return el('div', {}, [
+    seccion('Salida manual desde gerencia',
+      'Para cuando el licor lo baja la gerencia y no un empleado con su código. Descuenta del almacén y se lo carga '
+      + 'al restaurante que escojas, igual que una salida normal. En el historial queda marcada como hecha desde '
+      + 'gerencia, para que se distinga de las que registra el personal con su código.',
+      el('div', { clase: 'fila-campos' }, [
+        campo('Restaurante que se lo lleva', restaurante),
+        campo('Motivo', motivo, 'Obligatorio. Queda en el historial junto a la salida.'),
+      ]),
+      campo('Buscar', buscador),
+      contenedor,
+      el('div', { estilo: { marginTop: '18px' } }, [
+        el('button', { clase: 'btn btn-primario', texto: 'Registrar salida', onclick: registrar }),
+      ])),
+  ]);
+}
+
+/* Confirmación con la lista a la vista, no un «¿Estás seguro?» genérico: un
+   modal que no se lee no evita ningún error y solo añade un toque. */
+function confirmarLineas({ lineas, productos, titulo, subtitulo }) {
+  const total = lineas.reduce((s, l) => s + l.cantidad, 0);
+  const filas = lineas.map((l) => {
+    const p = productos.find((x) => x.id === l.productoId);
+    return el('div', { clase: 'linea-confirmar' }, [
+      el('span', { clase: 'n', texto: p ? p.nombre : 'Producto' }),
+      el('span', { clase: 'q', texto: String(l.cantidad) }),
+    ]);
+  });
+
+  return new Promise((resolver) => {
+    let decidido = false;
+    const responder = (v) => { if (!decidido) { decidido = true; resolver(v); } };
+    abrirModal({
+      titulo: `¿Registrar ${titulo} de ${total} ${total === 1 ? 'botella' : 'botellas'}?`,
+      subtitulo,
+      contenido: el('div', { clase: 'lista-confirmar' }, filas),
+      botones: [
+        { texto: 'Revisar', accion: () => { responder(false); cerrarModal(); } },
+        {
+          texto: 'Sí, registrar',
+          clase: 'btn-primario',
+          // Se responde ANTES de cerrar: cerrarModal dispara alCerrar, y al
+          // revés ese alCerrar resuelve en false y no se registra nada.
+          accion: () => { responder(true); cerrarModal(); },
+        },
+      ],
+      alCerrar: () => responder(false),
+    });
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Reportes                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -826,10 +992,20 @@ async function vistaReportes() {
     emp.length ? seccion('Por empleado', null,
       tabla(['Empleado', 'Restaurante', { t: 'Botellas', num: true }, { t: 'Valor', num: true }],
         emp.map((e) => {
-          const suyo = movs.find((m) => m.empleadoId === e.clave);
+          const suyos = movs.filter((m) => m.empleadoId === e.clave);
+          /* Esta columna mostraba el restaurante del primer movimiento. Con un
+             empleado da igual —pertenece a uno solo—, pero un gerente escoge el
+             local en cada salida manual, y entonces la celda decía «La Madre»
+             sobre un total que incluía otros tres locales. */
+          const locales = [...new Set(suyos.map((m) => m.restauranteId).filter(Boolean))];
           return el('tr', {}, [
-            el('td', { texto: nombreEmp(e.clave) }),
-            el('td', { texto: nombreRest(suyo?.restauranteId) }),
+            el('td', {}, [
+              el('span', { texto: nombreEmp(e.clave) }),
+              suyos.some((m) => m.origen === 'admin')
+                ? el('span', { clase: 'etiqueta origen-admin', estilo: { marginLeft: '8px' }, texto: 'Desde gerencia' })
+                : null,
+            ].filter(Boolean)),
+            el('td', { texto: locales.length > 1 ? `Varios (${locales.length})` : nombreRest(locales[0]) }),
             el('td', { clase: 'num', texto: numero(e.unidades) }),
             el('td', { clase: 'num', texto: dinero(e.valor) }),
           ]);
@@ -846,11 +1022,15 @@ async function vistaReportes() {
 }
 
 function exportarMovimientos(movs, nombreRest) {
-  const filas = [['Fecha y hora', 'Dia operativo', 'Tipo', 'Producto', 'Cantidad', 'Restaurante',
-    'Empleado', 'Existencia antes', 'Existencia despues', 'Costo unitario', 'Motivo', 'Autorizado por']];
+  const filas = [['Fecha y hora', 'Dia operativo', 'Tipo', 'Registrado desde', 'Producto', 'Cantidad',
+    'Restaurante', 'Empleado', 'Existencia antes', 'Existencia despues', 'Costo unitario',
+    'Motivo', 'Autorizado por']];
   for (const m of movs) {
     filas.push([
       fechaHoraPR(m.fechaISO), m.diaOperativo, TIPOS[m.tipo]?.etiqueta || m.tipo,
+      // Los movimientos de antes de este campo no lo tienen. Se declaran como
+      // del panel del empleado, que es el único origen que existía entonces.
+      m.origen === 'admin' ? 'Gerencia' : 'Panel del empleado',
       m.productoNombre, m.delta, m.restauranteId ? nombreRest(m.restauranteId) : '',
       m.empleadoNombre, m.existenciaAntes, m.existenciaDespues,
       m.costoUnitario || 0, m.motivo || '', m.autorizadoPor || '',
@@ -884,6 +1064,7 @@ async function vistaHistorial() {
         restauranteId: m.restauranteId,
         motivo: m.motivo,
         autorizadoPor: m.autorizadoPor,
+        origen: m.origen,
         lineas: [],
       };
       lotes.set(m.loteId, g);
@@ -945,10 +1126,19 @@ function filaLote(g, nombreRest) {
     },
   }, [
     el('td', { texto: fechaHoraPR(g.fechaISO) }),
-    el('td', {}, [el('span', {
-      clase: `etiqueta ${g.tipo === 'salida' ? 'critico' : (g.tipo === 'reversion' ? 'agotado' : 'ok')}`,
-      texto: TIPOS[g.tipo]?.etiqueta || g.tipo,
-    })]),
+    el('td', {}, [
+      el('span', {
+        clase: `etiqueta ${g.tipo === 'salida' ? 'critico' : (g.tipo === 'reversion' ? 'agotado' : 'ok')}`,
+        texto: TIPOS[g.tipo]?.etiqueta || g.tipo,
+      }),
+      /* Solo en las salidas. Entradas, ajustes, devoluciones y reversiones
+         únicamente ocurren en el panel de gerencia, así que marcarlas no diría
+         nada. La salida es el único movimiento con dos orígenes posibles, y
+         por eso es el único donde hace falta distinguirlos. */
+      g.tipo === 'salida' && g.origen === 'admin'
+        ? el('span', { clase: 'etiqueta origen-admin', texto: 'Desde gerencia' })
+        : null,
+    ].filter(Boolean)),
     el('td', { texto: g.empleadoNombre }),
     el('td', { texto: g.restauranteId ? nombreRest(g.restauranteId) : '—' }),
     el('td', {}, [
@@ -1245,7 +1435,7 @@ function modalPrevioCatalogo(plan) {
     ]) : null,
 
     resumen.sinNivel ? el('p', { clase: 'desc', texto:
-      `${resumen.sinNivel} ${resumen.sinNivel === 1 ? 'producto queda' : 'productos quedan'} sin nivel par `
+      `${resumen.sinNivel} ${resumen.sinNivel === 1 ? 'producto queda' : 'productos quedan'} sin máximo `
       + 'porque no traen pedido mensual. Se cargan igual, pero no van a alertar cuando se acaben '
       + 'hasta que se les ponga un par.' }) : null,
 
@@ -1260,7 +1450,7 @@ function modalPrevioCatalogo(plan) {
     lineas.length ? el('div', { clase: 'seccion' }, [
       el('h2', { texto: `Lo que se va a cargar${lineas.length > 30 ? ' (primeros 30)' : ''}` }),
       tabla(
-        ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Par', num: true }, { t: 'Reorden', num: true }, ''],
+        ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Máximo', num: true }, { t: 'Mínimo', num: true }, ''],
         lineas.slice(0, 30).map((l) => el('tr', {}, [
           el('td', { texto: l.nombre }),
           el('td', { texto: l.categoriaNombre }),

@@ -528,6 +528,9 @@ tbody tr:active { background: var(--panel); }
 .etiqueta.bajo { background: color-mix(in srgb, var(--bajo) 20%, transparent); color: var(--bajo); }
 .etiqueta.critico { background: color-mix(in srgb, var(--critico) 22%, transparent); color: var(--critico); }
 .etiqueta.agotado { background: color-mix(in srgb, var(--agotado) 22%, transparent); color: var(--texto-2); }
+/* Contorno en vez de relleno: acompaña a la etiqueta del tipo sin competir con
+   ella. Dice de dónde salió el movimiento, no qué movimiento es. */
+.etiqueta.origen-admin { background: transparent; border: 1px solid var(--borde); color: var(--texto-2); margin-left: 6px; }
 
 .aviso-banda {
   display: flex; align-items: center; gap: 14px;
@@ -604,4 +607,35 @@ tbody tr:active { background: var(--panel); }
   .carrito { width: 288px; }
   .rejilla-restaurantes { grid-template-columns: 1fr; }
   .fila-campos, .fila-campos-3 { grid-template-columns: 1fr; }
+}
+
+/* Lista de la confirmación previa a registrar una salida.
+
+   Deliberadamente grande: el empleado la lee de pie, con prisa y a un brazo de
+   distancia del iPad. Si esta lista no se lee, la confirmación no evita nada y
+   solo añade un toque. */
+.lista-confirmar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.linea-confirmar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fondo-2);
+  font-size: 17px;
+}
+
+.linea-confirmar .n { flex: 1; }
+
+.linea-confirmar .q {
+  font-weight: 700;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.2ch;
+  text-align: right;
 }

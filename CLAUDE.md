@@ -214,8 +214,11 @@ Detalles que sostienen esta publicación y no hay que romper:
   tomara el color del local, en La Grieta saldría rojo y se leería como borrar.
 - **Día operativo desde las 5:00 a.m.** Un bar cierra a las 2. Con día calendario,
   un turno se parte en dos fechas y los reportes no cuadran con la realidad.
-- **Cierre de sesión a los 60 segundos.** Sin eso, el registro de auditoría no
-  vale nada: las botellas del siguiente quedarían a nombre del anterior.
+- **Cierre de sesión a los 180 segundos** (`INACTIVIDAD_EMPLEADO`), 300 para la
+  gerencia. Sin cierre automático el registro de auditoría no vale nada: las
+  botellas del siguiente quedarían a nombre del anterior. Arrancó en 60 y se
+  subió a 3 minutos: con un minuto, buscar seis licores en el almacén cerraba la
+  sesión a media compra.
 - **Nombre de base parametrizable** (`globalThis.__ALMACEN_DB_PRUEBAS__`): existe
   solo para que `pruebas.html` no toque el inventario real. La página verifica el
   nombre y se niega a correr si apunta a la base de producción.
@@ -232,3 +235,99 @@ y costo mensual, menos lo último):
 - Integración con el POS de los restaurantes.
 - Sugerencia automática del nivel par a partir del consumo y el plazo de entrega
   (el dato de consumo semanal ya se calcula y se muestra; falta proponerlo).
+
+
+## Decisiones de agosto 2026
+
+### Confirmación antes de registrar, en vez de deshacer después
+El empleado veía un botón «Deshacer» durante 15 segundos después de registrar la
+salida. Ahora ve la lista completa —productos, cantidades, su nombre y su
+restaurante— **antes** de registrar, y el deshacer desapareció.
+
+Lo que se gana: el error se evita en vez de corregirse, y no depende de que la
+persona reaccione en 15 segundos con el bar por abrir. Lo que se pierde: la red
+de seguridad. Un error registrado ahora solo lo corrige un gerente desde el
+Historial. Por eso la confirmación muestra la lista entera y no un «¿Confirmar?»
+genérico: un modal que no se lee no evita nada y solo añade un toque.
+
+Detalle de implementación que costó un fallo: `cerrarModal()` dispara `alCerrar`,
+así que en los botones hay que resolver la promesa **antes** de cerrar. Al revés,
+`alCerrar` resolvía en `false` y la salida nunca se registraba.
+
+### El empleado ya no cambia su propio código
+Se quitó «Cambiar mi código» del panel y se borró `modalCambiarCodigo`. Los
+códigos los asigna y los cambia un gerente desde Administración → Empleados.
+
+Consecuencia que hay que decir en voz alta y que está escrita en el manual: **la
+gerencia conoce el código de cada empleado.** El registro prueba desde qué código
+salió cada botella, no quién lo tecleó. Sirve para saber a quién preguntarle, no
+para acusar por sí solo. Decisión del dueño del producto, tomada a sabiendas.
+
+### «Par» y «punto de reorden» pasaron a «Máximo» y «Mínimo»
+Solo cambiaron las etiquetas visibles, el manual, las propuestas y las columnas
+de la plantilla. **Los campos de la base siguen llamándose `par` y
+`puntoReorden`**: renombrarlos obligaría a migrar los datos de los iPads que ya
+tienen el sistema instalado y no cambia nada para nadie.
+
+«Par» venía del inglés de la industria hotelera y en español no dice nada. Ojo
+con el malentendido natural: el máximo **no** es un mínimo — el inventario baja
+de él constantemente y eso es lo que arma la lista de compra. El que es un
+mínimo de verdad es el punto de reorden.
+
+`importar.js` acepta los dos juegos de nombres de columna, porque hay plantillas
+repartidas con los títulos viejos.
+
+### Una prueba que solo fallaba de madrugada
+`pruebas.html` consultaba con `fechaPR()` movimientos archivados por
+`diaOperativo`. Entre medianoche y las 5:00 a.m. el día operativo es el anterior,
+la consulta salía vacía y la prueba reventaba en `[0].unidades`. Corregido a
+`diaOperativo(new Date(), 5)`. Cualquier prueba que consulte movimientos por
+fecha tiene que usar el día operativo, nunca la fecha del calendario.
+
+### Salida manual desde gerencia
+Hasta ahora las botellas solo salían por el panel del empleado, y un gerente no
+puede entrar ahí: su código lo manda directo a Administración. Si el propio
+gerente bajaba una caja a un restaurante, lo único que le reducía el inventario
+era el conteo físico — y ese ajuste **no se le carga a ningún restaurante**. La
+botella desaparecía del almacén sin aparecer en el consumo de nadie, y el
+reparto de costos entre los cuatro locales quedaba corto.
+
+Administración → **Salida manual** cierra ese hueco: escoge restaurante,
+motivo (obligatorio) y productos, y registra un `salida` normal a nombre del
+gerente con la sesión abierta.
+
+**Campo `origen` en cada movimiento** (`'empleado'` por defecto, `'admin'` en la
+salida manual y en toda reversión). Existe porque acá el gerente **escoge** el
+restaurante y en el panel del empleado no se escoge nada — el código lo
+resuelve. Son dos cosas distintas y el historial tiene que decirlo, o esta
+pantalla se vuelve la única puerta para mover inventario a mano y que se lea
+igual que el registro honesto, en el producto cuyo argumento de venta es saber
+quién sacó qué. Se marca **solo en las salidas**: entradas, ajustes,
+devoluciones y reversiones únicamente ocurren en gerencia, así que etiquetarlas
+no diría nada.
+
+En `revertirLote` el `origen: 'admin'` va escrito explícito. El espejo se
+construye con `...orig`, así que sin esa línea la reversión de la salida de un
+mesero quedaría marcada como hecha por un empleado. Hay prueba de eso.
+
+**Sin existencia no se fuerza el negativo.** En el panel del empleado un gerente
+puede autorizar la excepción porque son dos personas; acá el gerente se
+autorizaría a sí mismo y eso no es un control. Si el número no cuadra, lo que
+está mal es el conteo, y el mensaje manda a Conteo físico.
+
+Efecto colateral que hubo que arreglar: la columna Restaurante del reporte «Por
+empleado» mostraba el restaurante del **primer** movimiento de la persona. Con
+un empleado da igual, pertenece a uno solo; un gerente escoge el local en cada
+salida manual, así que la celda decía «La Madre» sobre un total que incluía
+otros tres locales. Ahora dice «Varios (n)» cuando hay más de uno.
+
+El CSV de movimientos lleva columna **«Registrado desde»**. Los movimientos
+anteriores a este campo no lo tienen y se declaran como del panel del empleado,
+que era el único origen que existía entonces.
+
+### Tequila y Mezcal son dos categorías
+Estaban fusionadas en «Tequila y Mezcal». Se separaron en `tequila` (orden 4) y
+`mezcal` (orden 5), y se renumeró de ginebra (6) hasta otros (12) — doce
+categorías. La plantilla `.xlsx`, su menú desplegable y la guía impresa dicen lo
+mismo. No hizo falta migrar nada: ninguna instalación real tenía el catálogo
+cargado todavía.

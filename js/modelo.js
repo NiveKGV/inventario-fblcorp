@@ -98,6 +98,7 @@ function validarLineas(lineas) {
 async function registrarLote({
   tipo, lineas, empleadoId, empleadoNombre, restauranteId = null,
   motivo = '', permitirNegativo = false, autorizadoPor = null,
+  origen = 'empleado',
 }) {
   const def = TIPOS[tipo];
   if (!def) throw new Error(`Tipo de movimiento desconocido: ${tipo}`);
@@ -163,6 +164,12 @@ async function registrarLote({
         // CSV y a la lista impresa. Un texto sin límite se convierte en papel.
         motivo: motivo.trim().slice(0, 200),
         autorizadoPor,
+        // Quién originó el movimiento, no quién lo firma. Una salida hecha
+        // desde el panel de gerencia deja escoger el restaurante; la del
+        // empleado no —el código lo determina—. Sin este campo las dos se ven
+        // idénticas en el historial, y el argumento entero del sistema es
+        // poder distinguirlas.
+        origen,
         negativoPermitido: despues < 0,
         fechaISO,
         diaOperativo: dia,
@@ -226,6 +233,10 @@ async function revertirLote(loteId, { empleadoId, empleadoNombre, motivo = 'Corr
         revierteA: loteId,
         negativoPermitido: false,
         autorizadoPor: null,
+        // Explícito, no heredado del `...orig`: revertir solo se puede desde
+        // el panel de gerencia. Sin esta línea, la reversión de la salida de
+        // un mesero quedaría marcada como hecha por un empleado.
+        origen: 'admin',
       });
     }
     for (const m of espejos) await pedir(s.movimientos.put(m));
