@@ -105,14 +105,18 @@ const CATALOGO = [
 
 /* Los empleados de prueba ya NO traen su código escrito aquí.
 
-   Antes eran ocho códigos fijos en texto claro —40317, 52846, y así— dentro de
-   un repositorio público. La pantalla de instalación trae «Cargar catálogo de
+   Antes eran ocho códigos fijos escritos en claro aquí mismo, dentro de un
+   repositorio público. La pantalla de instalación trae «Cargar catálogo de
    ejemplo» marcado por omisión, así que en cualquier instalación donde nadie
    los desactivara, quien encontrara el repositorio tenía ocho códigos válidos y
    solo le faltaba un minuto a solas con el iPad.
 
    Ahora se sortean al instalar y se enseñan una sola vez, como los de verdad.
-   Lo que está publicado ya no sirve de nada. */
+
+   OJO con los iPads ya configurados: este cambio solo afecta a instalaciones
+   NUEVAS. Un aparato que cargó los ejemplos antes conserva los códigos viejos,
+   que siguen publicados en el historial de git y no se pueden despublicar. En
+   esos hay que borrar los datos de ejemplo desde Administración → Sistema. */
 const EMPLEADOS_EJEMPLO = [
   ['Carlos Vázquez', 'la-madre'],
   ['María Rivera', 'la-madre'],
