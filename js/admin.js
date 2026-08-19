@@ -355,9 +355,27 @@ async function modalProducto(producto) {
   const nombre = el('input', {
     type: 'text', value: p.nombre, autocapitalize: 'words', maxlength: String(LARGO.nombre),
   });
-  const categoria = el('select', {}, categorias.map((c) => el('option', {
-    value: c.id, texto: c.nombre, selected: c.id === p.categoriaId,
-  })));
+  /* Crear una categoría se hace aquí y no en una pantalla aparte: el momento
+     en que hace falta una nueva es justo cuando estás dando de alta un producto
+     que no encaja en ninguna. Mandar a la persona a otra pantalla, crearla y
+     volver es el camino que nadie recorre —se escoge «Otros» y se pierde el
+     dato para siempre. */
+  const CATEGORIA_NUEVA = '__nueva__';
+  const categoria = el('select', {}, [
+    ...categorias.map((c) => el('option', {
+      value: c.id, texto: c.nombre, selected: c.id === p.categoriaId,
+    })),
+    el('option', { value: CATEGORIA_NUEVA, texto: '＋ Escribir una categoría nueva…' }),
+  ]);
+  const categoriaNueva = el('input', {
+    type: 'text', maxlength: '30', placeholder: 'Sake, Cordiales sin alcohol…', autocapitalize: 'words',
+  });
+  const campoNueva = campo('Nombre de la categoría nueva', categoriaNueva);
+  campoNueva.hidden = true;
+  categoria.onchange = () => {
+    campoNueva.hidden = categoria.value !== CATEGORIA_NUEVA;
+    if (!campoNueva.hidden) categoriaNueva.focus();
+  };
   const tamano = el('input', { type: 'text', value: p.tamano || '', maxlength: String(LARGO.tamano) });
   const par = el('input', { type: 'number', min: '0', step: '1', value: String(p.par) });
   const reorden = el('input', { type: 'number', min: '0', step: '1', value: String(p.puntoReorden) });
@@ -371,6 +389,7 @@ async function modalProducto(producto) {
     contenido: el('div', {}, [
       campo('Nombre', nombre),
       el('div', { clase: 'fila-campos' }, [campo('Categoría', categoria), campo('Tamaño', tamano)]),
+      campoNueva,
       el('div', { clase: 'fila-campos-3' }, [
         campo('Máximo', par, 'Cuánto debe haber cuando el almacén está completo'),
         campo('Mínimo', reorden, 'Al llegar aquí se pone en rojo: hay que pedir'),
@@ -416,11 +435,36 @@ async function modalProducto(producto) {
           if (vReorden > vPar) { err.textContent = 'El mínimo no puede ser mayor que el máximo: el producto se pondría en rojo permanentemente.'; return; }
           if (esNuevo && (!Number.isInteger(vExistencia) || vExistencia < 0)) { err.textContent = 'La existencia inicial debe ser un entero de cero o más.'; return; }
 
+          /* La categoría nueva se crea antes de guardar el producto, para que
+             este no quede apuntando a una que no existe. Se compara sin
+             acentos ni mayúsculas: «Sake» y «sake» son la misma, y dos
+             categorías con el mismo nombre parten el inventario en dos
+             montones que nadie sabe por qué están separados. */
+          let categoriaId = categoria.value;
+          if (categoriaId === CATEGORIA_NUEVA) {
+            const nom = categoriaNueva.value.trim();
+            if (nom.length < 2) { err.textContent = 'Escribe el nombre de la categoría nueva.'; return; }
+            const repetida = categorias.find((c) => normalizar(c.nombre) === normalizar(nom));
+            if (repetida) {
+              err.textContent = `Ya existe una categoría «${repetida.nombre}». Escógela en la lista.`;
+              return;
+            }
+            const nueva = {
+              id: nuevoId('c'),
+              nombre: nom,
+              color: '#7a8290',
+              orden: Math.max(0, ...categorias.map((c) => c.orden)) + 1,
+              activa: true,
+            };
+            await DB.guardar('categorias', nueva);
+            categoriaId = nueva.id;
+          }
+
           const guardado = {
             ...p,
             id: p.id || nuevoId('p'),
             nombre: n,
-            categoriaId: categoria.value,
+            categoriaId,
             tamano: tamano.value.trim(),
             par: vPar,
             puntoReorden: vReorden,

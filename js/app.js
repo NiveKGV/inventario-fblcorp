@@ -61,11 +61,65 @@ async function iniciar() {
     await DB.abrir();
     const configurado = await DB.leerConfig('configurado', false);
     if (!configurado) { prepararConfigInicial(); return; }
+    await alinearCategorias();
     await cargarCache();
     mostrarAcceso();
   } catch (e) {
     $('#carga-texto').textContent = `No se pudo abrir la base de datos: ${e.message}`;
   }
+}
+
+/* Pone al día las categorías de un iPad que ya estaba instalado.
+
+   Las categorías se siembran UNA sola vez, al configurar el sistema. Actualizar
+   la app no las toca, así que separar «Tequila y Mezcal» en el código no
+   cambiaba nada en un aparato que ya se había configurado: seguía mostrando la
+   categoría vieja y no había forma de arreglarlo salvo reinstalar y perder el
+   inventario. Lo mismo pasaría con cualquier categoría que se añada más
+   adelante.
+
+   Qué hace y qué NO hace, porque acá se toca data que ya existe:
+   - Añade las categorías del código que falten en el aparato.
+   - Corrige el nombre y el orden de las que el código conoce, para que un
+     rótulo viejo no sobreviva a un cambio.
+   - No borra ni desactiva nada. Si el cliente creó sus propias categorías, o
+     desactivó alguna de las nuestras, eso se respeta: `activa` no se toca.
+   - Los productos guardan `categoriaId`, no el nombre, así que renombrar no
+     desconecta ningún producto de su categoría. */
+async function alinearCategorias() {
+  const enAparato = await DB.todos('categorias');
+  const porId = new Map(enAparato.map((c) => [c.id, c]));
+  const aGuardar = [];
+
+  for (const patron of CATEGORIAS) {
+    const actual = porId.get(patron.id);
+    if (!actual) {
+      aGuardar.push({ ...patron });
+    } else if (actual.nombre !== patron.nombre || actual.orden !== patron.orden) {
+      aGuardar.push({ ...actual, nombre: patron.nombre, orden: patron.orden });
+    }
+  }
+
+  if (aGuardar.length) await DB.guardarVarios('categorias', aGuardar);
+
+  /* Separar las categorías sin mover los productos deja el trabajo a medias:
+     los mezcales seguirían archivados bajo Tequila y la separación no se vería
+     por ninguna parte.
+
+     Solo se mueven los que llevan «mezcal» en el nombre y están en Tequila. No
+     es adivinar: mezcal y tequila son denominaciones de origen distintas por
+     ley, así que un tequila no puede llamarse mezcal. Cualquier otro producto
+     mal clasificado se arregla a mano desde Inventario, que es lo correcto
+     porque ahí sí habría que adivinar. */
+  const hayMezcal = await DB.obtener('categorias', 'mezcal');
+  if (!hayMezcal) return aGuardar.length;
+
+  const mal = (await DB.todos('productos'))
+    .filter((p) => p.categoriaId === 'tequila' && /mezcal/i.test(p.nombre));
+  if (mal.length) {
+    await DB.guardarVarios('productos', mal.map((p) => ({ ...p, categoriaId: 'mezcal' })));
+  }
+  return aGuardar.length + mal.length;
 }
 
 async function cargarCache() {
@@ -760,7 +814,10 @@ function cerrarPorInactividad() {
    quede hasta 59 s desfasado, que es justo lo que alguien nota. */
 function pintarRelojes() {
   const ahora = horaPR(new Date());
-  for (const id of ['reloj-acceso', 'reloj-panel', 'reloj-admin']) {
+  // 'reloj-acceso' ya no existe: la pantalla del código no lleva reloj propio
+  // porque la barra de estado de iOS muestra la hora justo encima. El bucle lo
+  // toleraría igual, pero nombrarlo aquí haría creer que sigue habiendo uno.
+  for (const id of ['reloj-panel', 'reloj-admin']) {
     const nodo = document.getElementById(id);
     if (nodo) nodo.textContent = ahora;
   }

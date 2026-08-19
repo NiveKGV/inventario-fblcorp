@@ -649,7 +649,6 @@ tbody tr:active { background: var(--panel); }
 
 .vacio { text-align: center; color: var(--texto-3); padding: 46px 20px; font-size: 16px; line-height: 1.6; }
 
-.pie-nota { font-size: 13px; color: var(--texto-3); }
 
 /* La caja del código de acceso es más ancha que la del teclado de PIN viejo:
    es la primera pantalla que ve todo el mundo y tiene que respirar. */
