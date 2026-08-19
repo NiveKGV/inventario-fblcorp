@@ -34,6 +34,20 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* El destello blanco al volver de la hoja de compartir (exportar CSV, respaldo)
+   salía de acá. El fondo oscuro estaba solo en `body`, y `color-scheme` solo
+   como etiqueta <meta>. WebKit pinta un lienzo base ANTES de que la página
+   pinte lo suyo, y ese lienzo es blanco mientras no se le diga otra cosa por
+   CSS: al volver de otra vista, iOS lo repinta y el blanco se ve un instante.
+
+   `color-scheme: dark` en el CSS es lo que le cambia el lienzo base al motor;
+   la etiqueta <meta> no basta. El fondo explícito en `html` es el segundo
+   freno, para no depender de que el color de `body` se propague a tiempo. */
+html {
+  color-scheme: dark;
+  background: var(--fondo);
+}
+
 html, body {
   height: 100%;
   margin: 0;
