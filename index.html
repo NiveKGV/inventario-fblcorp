@@ -20,6 +20,11 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="iconos/icono-180.png">
 <link rel="icon" href="iconos/icono-192.png">
+<!-- Este fondo va aquí dentro, y no solo en la hoja de estilos, para que el
+     PRIMER pintado ya sea oscuro. Si la hoja tarda o falla, el navegador
+     pintaría su lienzo blanco mientras tanto: en una app oscura eso es un
+     fogonazo en la cara de alguien en un almacén con poca luz. -->
+<style>html,body{background:#121317;color-scheme:dark}</style>
 <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>

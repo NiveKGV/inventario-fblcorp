@@ -1651,7 +1651,44 @@ async function vistaSistema() {
           mostrarCodigos(ejemplos.filter((e) => !omitidos.includes(e.nombre)), omitidos);
         },
       })),
+
+    await seccionVersion(),
   ].filter(Boolean));
+}
+
+/* Qué versión está corriendo este aparato, y si de verdad se actualizó.
+
+   Existe porque durante días no hubo forma de saberlo: se publicaba una
+   corrección, el iPad seguía igual, y no había manera de distinguir «no llegó»
+   de «llegó y el fallo es otro». Se persiguieron fantasmas por eso.
+
+   El dato viene del nombre del caché activo, no de una constante escrita en el
+   código. Una constante en el JS podría estar tan vieja como el resto y diría
+   la versión equivocada con total seguridad. El caché lo nombra el service
+   worker al instalarse, así que dice qué se instaló de verdad. */
+async function seccionVersion() {
+  let instalada = 'no se pudo leer';
+  let controlando = false;
+  try {
+    const claves = window.caches ? await caches.keys() : [];
+    const propio = claves.find((k) => k.startsWith('almacen-licores-'));
+    if (propio) instalada = propio.replace('almacen-licores-', '');
+    else if (!claves.length) instalada = 'sin instalar (abierta desde la red)';
+    controlando = !!navigator.serviceWorker?.controller;
+  } catch { /* navegador sin caches o sin permiso: se queda en el aviso */ }
+
+  return seccion('Versión instalada',
+    'Para saber si este iPad tiene la última corrección. Si acabas de publicar un cambio y el número '
+    + 'no sube, cierra la app por completo y ábrela con wifi: la primera vez trae la versión nueva y '
+    + 'la segunda ya la usa.',
+    el('p', { clase: 'desc', estilo: { marginBottom: '0' } }, [
+      el('strong', { texto: instalada }),
+      el('span', {
+        texto: controlando
+          ? ' · funciona sin internet'
+          : ' · todavía no funciona sin internet (falta cerrarla y abrirla una vez)',
+      }),
+    ]));
 }
 
 export { abrirAdmin, salirAdmin };
