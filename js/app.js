@@ -13,7 +13,9 @@ import { DB, nuevoId } from './db.js';
 import {
   nuevaSal, derivarCodigo, igualesConstante, codigoDebil, contextoSeguro, LARGO_CODIGO,
 } from './cripto.js';
-import { RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo } from './datos.js';
+import {
+  RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
+} from './datos.js';
 import {
   estadoStock, registrarLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
 } from './modelo.js';
@@ -61,65 +63,22 @@ async function iniciar() {
     await DB.abrir();
     const configurado = await DB.leerConfig('configurado', false);
     if (!configurado) { prepararConfigInicial(); return; }
-    await alinearCategorias();
+    /* Aparte del try grande y a propósito. Poner al día unos rótulos de
+       categoría es cosmético, y un fallo suyo —transacción abortada,
+       almacenamiento lleno— no puede dejar el almacén sin abrir en pleno
+       servicio. Peor todavía: caía en el catch de abajo y culpaba a la base de
+       datos, que había abierto perfectamente, mandando a mirar el sitio
+       equivocado. Si falla, la app abre igual con las categorías que tenga. */
+    try {
+      await alinearCategorias();
+    } catch (e) {
+      console.warn('No se pudieron alinear las categorías:', e);
+    }
     await cargarCache();
     mostrarAcceso();
   } catch (e) {
     $('#carga-texto').textContent = `No se pudo abrir la base de datos: ${e.message}`;
   }
-}
-
-/* Pone al día las categorías de un iPad que ya estaba instalado.
-
-   Las categorías se siembran UNA sola vez, al configurar el sistema. Actualizar
-   la app no las toca, así que separar «Tequila y Mezcal» en el código no
-   cambiaba nada en un aparato que ya se había configurado: seguía mostrando la
-   categoría vieja y no había forma de arreglarlo salvo reinstalar y perder el
-   inventario. Lo mismo pasaría con cualquier categoría que se añada más
-   adelante.
-
-   Qué hace y qué NO hace, porque acá se toca data que ya existe:
-   - Añade las categorías del código que falten en el aparato.
-   - Corrige el nombre y el orden de las que el código conoce, para que un
-     rótulo viejo no sobreviva a un cambio.
-   - No borra ni desactiva nada. Si el cliente creó sus propias categorías, o
-     desactivó alguna de las nuestras, eso se respeta: `activa` no se toca.
-   - Los productos guardan `categoriaId`, no el nombre, así que renombrar no
-     desconecta ningún producto de su categoría. */
-async function alinearCategorias() {
-  const enAparato = await DB.todos('categorias');
-  const porId = new Map(enAparato.map((c) => [c.id, c]));
-  const aGuardar = [];
-
-  for (const patron of CATEGORIAS) {
-    const actual = porId.get(patron.id);
-    if (!actual) {
-      aGuardar.push({ ...patron });
-    } else if (actual.nombre !== patron.nombre || actual.orden !== patron.orden) {
-      aGuardar.push({ ...actual, nombre: patron.nombre, orden: patron.orden });
-    }
-  }
-
-  if (aGuardar.length) await DB.guardarVarios('categorias', aGuardar);
-
-  /* Separar las categorías sin mover los productos deja el trabajo a medias:
-     los mezcales seguirían archivados bajo Tequila y la separación no se vería
-     por ninguna parte.
-
-     Solo se mueven los que llevan «mezcal» en el nombre y están en Tequila. No
-     es adivinar: mezcal y tequila son denominaciones de origen distintas por
-     ley, así que un tequila no puede llamarse mezcal. Cualquier otro producto
-     mal clasificado se arregla a mano desde Inventario, que es lo correcto
-     porque ahí sí habría que adivinar. */
-  const hayMezcal = await DB.obtener('categorias', 'mezcal');
-  if (!hayMezcal) return aGuardar.length;
-
-  const mal = (await DB.todos('productos'))
-    .filter((p) => p.categoriaId === 'tequila' && /mezcal/i.test(p.nombre));
-  if (mal.length) {
-    await DB.guardarVarios('productos', mal.map((p) => ({ ...p, categoriaId: 'mezcal' })));
-  }
-  return aGuardar.length + mal.length;
 }
 
 async function cargarCache() {

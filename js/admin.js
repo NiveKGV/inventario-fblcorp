@@ -6,7 +6,7 @@
 
 import { DB, nuevoId } from './db.js';
 import { derivarCodigo, igualesConstante, codigoDebil, LARGO_CODIGO } from './cripto.js';
-import { productosIniciales, empleadosEjemplo } from './datos.js';
+import { productosIniciales, empleadosEjemplo, alinearCategorias } from './datos.js';
 import {
   estadoStock, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, consumoSemanal,
@@ -435,51 +435,66 @@ async function modalProducto(producto) {
           if (vReorden > vPar) { err.textContent = 'El mínimo no puede ser mayor que el máximo: el producto se pondría en rojo permanentemente.'; return; }
           if (esNuevo && (!Number.isInteger(vExistencia) || vExistencia < 0)) { err.textContent = 'La existencia inicial debe ser un entero de cero o más.'; return; }
 
-          /* La categoría nueva se crea antes de guardar el producto, para que
-             este no quede apuntando a una que no existe. Se compara sin
-             acentos ni mayúsculas: «Sake» y «sake» son la misma, y dos
-             categorías con el mismo nombre parten el inventario en dos
-             montones que nadie sabe por qué están separados. */
-          let categoriaId = categoria.value;
-          if (categoriaId === CATEGORIA_NUEVA) {
-            const nom = categoriaNueva.value.trim();
-            if (nom.length < 2) { err.textContent = 'Escribe el nombre de la categoría nueva.'; return; }
-            const repetida = categorias.find((c) => normalizar(c.nombre) === normalizar(nom));
-            if (repetida) {
-              err.textContent = `Ya existe una categoría «${repetida.nombre}». Escógela en la lista.`;
-              return;
+          /* Todo el guardado va en un try. Antes no lo tenía: si la escritura
+             fallaba, la promesa se rechazaba sin que nada se lo dijera a la
+             persona —ni aviso, ni cierre del modal, ni cambio en pantalla—. Se
+             tocaba Guardar y no pasaba absolutamente nada, con lo que lo normal
+             era volver a tocar. */
+          try {
+            /* La categoría nueva se crea antes de guardar el producto, para que
+               este no quede apuntando a una que no existe. Se compara sin
+               acentos ni mayúsculas: «Sake» y «sake» son la misma, y dos
+               categorías con el mismo nombre parten el inventario en dos
+               montones que nadie sabe por qué están separados. */
+            let categoriaId = categoria.value;
+            if (categoriaId === CATEGORIA_NUEVA) {
+              const nom = categoriaNueva.value.trim();
+              if (nom.length < 2) { err.textContent = 'Escribe el nombre de la categoría nueva.'; return; }
+              /* Se relee de la base y no se usa el `categorias` capturado al
+                 abrir el modal: ese es una foto vieja, y si por cualquier
+                 camino ya existe una categoría con ese nombre, la foto no la
+                 ve y se crea la duplicada que este mismo mensaje intenta
+                 evitar. La comprobación tiene que ser contra lo que hay ahora. */
+              const alDia = await DB.todos('categorias');
+              const repetida = alDia.find((c) => normalizar(c.nombre) === normalizar(nom));
+              if (repetida) {
+                err.textContent = `Ya existe una categoría «${repetida.nombre}». Escógela en la lista.`;
+                return;
+              }
+              const nueva = {
+                id: nuevoId('c'),
+                nombre: nom,
+                color: '#7a8290',
+                orden: Math.max(0, ...alDia.map((c) => c.orden)) + 1,
+                activa: true,
+              };
+              await DB.guardar('categorias', nueva);
+              categoriaId = nueva.id;
             }
-            const nueva = {
-              id: nuevoId('c'),
-              nombre: nom,
-              color: '#7a8290',
-              orden: Math.max(0, ...categorias.map((c) => c.orden)) + 1,
-              activa: true,
-            };
-            await DB.guardar('categorias', nueva);
-            categoriaId = nueva.id;
-          }
 
-          const guardado = {
-            ...p,
-            id: p.id || nuevoId('p'),
-            nombre: n,
-            categoriaId,
-            tamano: tamano.value.trim(),
-            par: vPar,
-            puntoReorden: vReorden,
-            costo: Math.max(0, Number(costo.value) || 0),
-            existencia: esNuevo ? vExistencia : p.existencia,
-            activo: true,
-            ejemplo: false,
-            orden: p.orden ?? 999,
-            creado: p.creado || new Date().toISOString(),
-          };
-          await DB.guardar('productos', guardado);
-          await ctx.refrescarCache();
-          cerrarModal();
-          brindis({ texto: esNuevo ? 'Producto agregado' : 'Producto actualizado', tipo: 'exito' });
-          render();
+            const guardado = {
+              ...p,
+              id: p.id || nuevoId('p'),
+              nombre: n,
+              categoriaId,
+              tamano: tamano.value.trim(),
+              par: vPar,
+              puntoReorden: vReorden,
+              costo: Math.max(0, Number(costo.value) || 0),
+              existencia: esNuevo ? vExistencia : p.existencia,
+              activo: true,
+              ejemplo: false,
+              orden: p.orden ?? 999,
+              creado: p.creado || new Date().toISOString(),
+            };
+            await DB.guardar('productos', guardado);
+            await ctx.refrescarCache();
+            cerrarModal();
+            brindis({ texto: esNuevo ? 'Producto agregado' : 'Producto actualizado', tipo: 'exito' });
+            render();
+          } catch (e) {
+            err.textContent = `No se pudo guardar: ${e.message}`;
+          }
         },
       },
     ].filter(Boolean),
@@ -1663,6 +1678,12 @@ async function vistaSistema() {
           try {
             const paquete = JSON.parse(await f.text());
             const r = await DB.importarTodo(paquete);
+            /* Restaurar reemplaza el store de categorías con las del archivo.
+               Sin esta línea, un respaldo anterior a la separación de Tequila y
+               Mezcal las revivía fusionadas hasta que alguien cerrara y
+               reabriera la app —y nada indicaba que hiciera falta reiniciar—.
+               Es el caso normal al montar un iPad de reemplazo. */
+            await alinearCategorias();
             /* Queda anotado quién restauró y cuántos movimientos había antes y
                después. Sin esto, una restauración es indistinguible de que no
                hubiera pasado nada, y es la operación con más poder del sistema. */

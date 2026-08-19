@@ -3,7 +3,7 @@
    Los empleados de ejemplo se crean sin PIN: cada persona lo define la primera
    vez que entra, con el gerente presente. */
 
-import { nuevoId } from './db.js';
+import { DB, nuevoId } from './db.js';
 import { codigoDebil, LARGO_CODIGO } from './cripto.js';
 
 const RESTAURANTES = [
@@ -182,6 +182,78 @@ function empleadosEjemplo() {
   }));
 }
 
+/* Pone al día las categorías de un aparato que ya estaba instalado.
+
+   Las categorías se siembran UNA sola vez, al configurar el sistema. Actualizar
+   la app no las toca, así que separar «Tequila y Mezcal» en el código no
+   cambiaba nada en un iPad ya configurado: seguía mostrando la categoría vieja
+   y no había forma de arreglarlo salvo reinstalar y perder el inventario. Lo
+   mismo pasaría con cualquier categoría que se añada más adelante.
+
+   Vive acá, y no en el arranque, porque hay dos momentos en que hace falta:
+   al abrir la app y **después de restaurar un respaldo**. Restaurar reemplaza
+   el store de categorías con las del archivo, así que un respaldo viejo revivía
+   la categoría fusionada hasta que alguien cerrara y volviera a abrir la app,
+   sin ninguna señal de que hiciera falta reiniciar.
+
+   Qué hace y qué NO hace, porque acá se toca data que ya existe:
+   - Añade las categorías del código que falten en el aparato.
+   - Corrige el nombre y el orden de las que el código conoce, para que un
+     rótulo viejo no sobreviva a un cambio.
+   - No borra ni desactiva nada. Si el cliente creó sus propias categorías, o
+     desactivó alguna de las nuestras, eso se respeta: `activa` no se toca.
+   - Los productos guardan `categoriaId`, no el nombre, así que renombrar no
+     desconecta ningún producto de su categoría. */
+async function alinearCategorias() {
+  const enAparato = await DB.todos('categorias');
+  const porId = new Map(enAparato.map((c) => [c.id, c]));
+  const aGuardar = [];
+
+  for (const patron of CATEGORIAS) {
+    const actual = porId.get(patron.id);
+    if (!actual) {
+      aGuardar.push({ ...patron });
+    } else if (actual.nombre !== patron.nombre || actual.orden !== patron.orden) {
+      aGuardar.push({ ...actual, nombre: patron.nombre, orden: patron.orden });
+    }
+  }
+
+  if (aGuardar.length) await DB.guardarVarios('categorias', aGuardar);
+  return aGuardar.length + await reubicarMezcales();
+}
+
+/* Mueve a Mezcal los productos que se quedaron bajo Tequila cuando las dos eran
+   una sola categoría. Separar las categorías sin mover los productos deja el
+   trabajo a medias: los mezcales seguirían archivados en Tequila.
+
+   Corre UNA sola vez y deja constancia en `config`. Al principio se evaluaba en
+   cada apertura, y eso deshacía en silencio el trabajo de la gerencia: si
+   alguien movía un mezcal a Tequila a propósito desde el modal de producto —una
+   acción que la interfaz ofrece—, al reabrir la app estaba de vuelta en Mezcal,
+   sin aviso y sin forma de que el cambio se quedara. Una migración corrige el
+   pasado; no puede seguir mandando sobre las decisiones de después.
+
+   Solo mueve los que llevan «mezcal» en el nombre. No es adivinar: mezcal y
+   tequila son denominaciones de origen distintas por ley, así que un tequila no
+   puede llamarse mezcal. */
+async function reubicarMezcales() {
+  if (await DB.leerConfig('mezcales_reubicados', false)) return 0;
+
+  const mezcal = await DB.obtener('categorias', 'mezcal');
+  // `activa` importa: una categoría desactivada no sale en las tiras del panel,
+  // así que mover productos ahí los haría desaparecer para el empleado, que
+  // solo podría alcanzarlos escribiendo el nombre en el buscador.
+  if (!mezcal || !mezcal.activa) return 0;
+
+  const mal = (await DB.todos('productos'))
+    .filter((p) => p.categoriaId === 'tequila' && /mezcal/i.test(p.nombre));
+  if (mal.length) {
+    await DB.guardarVarios('productos', mal.map((p) => ({ ...p, categoriaId: 'mezcal' })));
+  }
+  await DB.escribirConfig('mezcales_reubicados', true);
+  return mal.length;
+}
+
 export {
-  RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo,
+  RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
 };

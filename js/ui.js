@@ -56,6 +56,35 @@ function pantallaActual() {
 
 let cerrarModalActual = null;
 
+/* Un botón de modal no se puede tocar dos veces mientras trabaja.
+
+   Los `accion` son asíncronos y casi todos guardan en la base antes de cerrar
+   el modal. Sin este candado, un dedo que rebota en el vidrio —cosa corriente
+   en un iPad— entra al manejador otra vez antes de que el primero termine, y
+   las dos ejecuciones ven exactamente el mismo estado. Medido en «Agregar
+   producto»: dos toques seguidos creaban dos categorías con el mismo nombre y
+   dos productos, cada uno apuntando a una de ellas.
+
+   Va aquí y no en cada manejador porque el problema es de todos: registrar una
+   salida, recibir una orden y restaurar un respaldo tienen la misma forma. */
+function unaSolaVez(accion) {
+  let corriendo = false;
+  return async (ev) => {
+    if (corriendo) return;
+    corriendo = true;
+    const boton = ev.currentTarget;
+    if (boton) boton.disabled = true;
+    try {
+      await accion(ev);
+    } finally {
+      corriendo = false;
+      // El botón puede haber desaparecido con el modal: reactivar uno que ya no
+      // está en pantalla no molesta, pero dejarlo apagado si sigue ahí sí.
+      if (boton && boton.isConnected) boton.disabled = false;
+    }
+  };
+}
+
 function abrirModal({
   titulo, subtitulo = '', contenido, botones = [], ancho = false, alCerrar = null,
 }) {
@@ -70,7 +99,7 @@ function abrirModal({
   pie.replaceChildren(...botones.map((b) => el('button', {
     clase: `btn ${b.clase || 'btn-fantasma'}`,
     texto: b.texto,
-    onclick: b.accion,
+    onclick: unaSolaVez(b.accion),
     id: b.id || false,
   })));
   pie.hidden = !botones.length;
