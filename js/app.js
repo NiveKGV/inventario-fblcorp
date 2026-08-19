@@ -799,8 +799,19 @@ if ('serviceWorker' in navigator) {
       .then(() => (window.caches ? caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))) : null))
       .catch(() => { /* nada que limpiar */ });
   } else {
+    /* `updateViaCache: 'none'` obliga a pedir `sw.js` a la red de verdad.
+       GitHub Pages lo sirve con `max-age=600`, y sin esta opción el navegador
+       comprueba si hay versión nueva contra su propia caché HTTP: el iPad no
+       se enteraba del cambio de VERSION y seguía con el service worker viejo,
+       que es el que decide qué archivos sirve.
+
+       El `update()` de después es el segundo intento: si la app llevaba rato
+       abierta y se recupera la conexión, fuerza la comprobación en vez de
+       esperar a que el navegador decida hacerla por su cuenta. */
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* sin conexión al registrar */ });
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then((reg) => reg.update().catch(() => { /* sin conexión */ }))
+        .catch(() => { /* sin conexión al registrar */ });
     });
   }
 }

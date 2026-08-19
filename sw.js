@@ -7,7 +7,7 @@
    Al publicar una versión nueva, sube el número de VERSION: eso invalida el
    caché viejo. Sin ese cambio el iPad se queda con la versión anterior. */
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = `almacen-licores-${VERSION}`;
 
 const ARCHIVOS = [
@@ -72,7 +72,22 @@ self.addEventListener('fetch', (ev) => {
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
 
   const guardado = caches.match(request);
-  const red = fetch(request).then((respuesta) => {
+
+  /* `cache: 'reload'` no es adorno: sin él, "red primero" no iba a la red.
+     GitHub Pages sirve todo con `cache-control: max-age=600`, y un `fetch()`
+     normal —también dentro del service worker— se sirve de la caché HTTP del
+     navegador. Resultado: durante diez minutos después de publicar, el iPad
+     creía estar pidiendo a la red y le devolvían el archivo viejo. Con
+     'reload' la petición salta esa caché y de paso la deja al día.
+
+     Se construye una petición nueva desde la URL en vez de pasarle opciones a
+     `request`: heredar un `mode: 'navigate'` con opciones encima revienta la
+     construcción en algunos navegadores. Acá solo hay GET del mismo origen,
+     así que no se pierde nada. */
+  const red = fetch(new Request(request.url, {
+    cache: 'reload',
+    credentials: 'same-origin',
+  })).then((respuesta) => {
     if (respuesta && respuesta.ok) {
       const copia = respuesta.clone();
       caches.open(CACHE).then((c) => c.put(request, copia));
