@@ -10,7 +10,7 @@ import { productosIniciales, empleadosEjemplo } from './datos.js';
 import {
   estadoStock, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, consumoSemanal,
-  resumenAlertas, fechaPR, sumarDias, fechaHoraPR, TIPOS,
+  resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, TIPOS,
 } from './modelo.js';
 import {
   $, el, mostrarPantalla, abrirModal, cerrarModal, confirmar,
@@ -41,6 +41,15 @@ const TABS = [
 let ctx = null;
 let tabActual = 'resumen';
 
+/* En qué día operativo estamos. Se guarda acá porque leerlo exige consultar la
+   configuración —y eso es asíncrono—, mientras que los rangos de fecha se
+   calculan dentro de manejadores que no pueden esperar. `render()` lo refresca
+   antes de pintar cualquier vista, así que siempre está al día.
+
+   Arranca en la fecha del calendario solo como valor provisional, para que
+   nada quede en nulo si algo pregunta antes del primer render. */
+let hoyOperativo = fechaPR();
+
 function abrirAdmin(gerente, opciones) {
   ctx = { gerente, ...opciones };
   tabActual = 'resumen';
@@ -65,6 +74,9 @@ async function render() {
   if (!ctx) return;
   const cuerpo = $('#admin-cuerpo');
   cuerpo.replaceChildren(el('p', { clase: 'vacio', texto: 'Cargando…' }));
+  // Antes de pintar nada: si la sesión quedó abierta y cruzó las 5:00 a.m., el
+  // día operativo cambió mientras el gerente miraba la pantalla.
+  hoyOperativo = await diaOperativoActual();
   const vistas = {
     resumen: vistaResumen,
     inventario: vistaInventario,
@@ -213,7 +225,10 @@ async function vistaResumen() {
   const [alertas, compra, productos] = await Promise.all([
     resumenAlertas(), listaCompra(), productosActivos(),
   ]);
-  const hoy = fechaPR();
+  // Día operativo, no fecha de calendario: a la 1:00 a.m. el turno que acaba
+  // de cerrar está archivado bajo el día anterior, y con `fechaPR()` esta
+  // tarjeta decía cero botellas sobre una noche entera de trabajo.
+  const hoy = hoyOperativo;
   const movsHoy = await movimientosPeriodo(hoy, hoy);
   const salidasHoy = movsHoy.filter((m) => m.restauranteId).reduce((s, m) => s + (-m.delta), 0);
 
@@ -908,17 +923,25 @@ const PRESETS = [
   ['mes', 'Este mes'],
 ];
 
+/* Los rangos se cuentan desde el día operativo, no desde la fecha del
+   calendario. Con `fechaPR()`, a la 1:00 a.m. «Hoy» salía vacío y la noche que
+   el gerente acababa de cerrar aparecía bajo «Ayer»: exactamente al revés de lo
+   que dice el resto del sistema. */
 function rangoPreset(clave) {
-  const hoy = fechaPR();
+  const hoy = hoyOperativo;
   if (clave === 'hoy') return [hoy, hoy];
   if (clave === 'ayer') { const a = sumarDias(hoy, -1); return [a, a]; }
   if (clave === 'mes') return [`${hoy.slice(0, 7)}-01`, hoy];
   return [sumarDias(hoy, -(parseInt(clave, 10) - 1)), hoy];
 }
 
-let rangoReporte = rangoPreset('7');
+/* Se resuelve al pintar y no al cargar el módulo: acá arriba todavía no se ha
+   leído la configuración, y el rango habría quedado clavado a la fecha del
+   calendario para toda la sesión. */
+let rangoReporte = null;
 
 async function vistaReportes() {
+  if (!rangoReporte) rangoReporte = rangoPreset('7');
   const [desde, hasta] = rangoReporte;
   const [movs, restaurantes, empleados] = await Promise.all([
     movimientosPeriodo(desde, hasta), DB.todos('restaurantes'), DB.todos('empleados'),
@@ -1044,6 +1067,7 @@ function exportarMovimientos(movs, nombreRest) {
 /* ------------------------------------------------------------------ */
 
 async function vistaHistorial() {
+  if (!rangoReporte) rangoReporte = rangoPreset('7');
   const [desde, hasta] = rangoReporte;
   const [movs, restaurantes] = await Promise.all([
     movimientosPeriodo(desde, hasta), DB.todos('restaurantes'),

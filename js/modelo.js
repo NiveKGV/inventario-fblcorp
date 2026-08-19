@@ -54,6 +54,18 @@ function diaOperativo(fecha, horaInicio) {
   return fechaPR(new Date(d.getTime() - horaInicio * 3600000));
 }
 
+/* En qué día operativo estamos AHORA, leyendo la hora de arranque configurada.
+
+   Existe porque `fechaPR()` y el día operativo no son lo mismo entre medianoche
+   y las 5:00 a.m., y ahí es justo cuando cierra un bar. Los movimientos se
+   archivan por día operativo; cualquier pantalla que pregunte «¿qué pasó hoy?»
+   tiene que preguntar por lo mismo, o a la 1:00 a.m. el gerente ve cero
+   botellas sobre un turno que acaba de terminar. */
+async function diaOperativoActual(cuando = new Date()) {
+  const horaInicio = await DB.leerConfig('inicio_dia_operativo', 5);
+  return diaOperativo(cuando, horaInicio);
+}
+
 function sumarDias(diaISO, n) {
   const [a, m, d] = diaISO.split('-').map(Number);
   const base = new Date(Date.UTC(a, m - 1, d));
@@ -331,7 +343,7 @@ async function resumenAlertas() {
 
 export {
   ZONA, TIPOS, ESTADOS,
-  fechaPR, horaPR, fechaHoraPR, diaOperativo, sumarDias,
+  fechaPR, horaPR, fechaHoraPR, diaOperativo, diaOperativoActual, sumarDias,
   estadoStock, registrarLote, revertirLote,
   productosActivos, listaCompra, movimientosPeriodo,
   porRestaurante, porEmpleado, porProducto,

@@ -129,6 +129,18 @@ igual(M.diaOperativo(new Date('2026-08-06T08:59:00Z'), 5), '2026-08-05',
   'Las 4:59 a.m. todavía son del día anterior');
 igual(M.diaOperativo(new Date('2026-01-15T22:00:00Z'), 5), '2026-01-15',
   'En invierno sigue igual: Puerto Rico no cambia la hora');
+/* Regresión de un fallo real: el Resumen y los rangos de Reportes preguntaban
+   por `fechaPR()` mientras los movimientos se archivan por día operativo. Entre
+   medianoche y las 5:00 a.m. eso daba cero botellas sobre un turno entero, y
+   la noche recién cerrada aparecía bajo «Ayer». `diaOperativoActual` es lo que
+   tiene que usar cualquier pantalla que pregunte «¿qué pasó hoy?». */
+igual(await M.diaOperativoActual(new Date('2026-08-19T06:33:00Z')), '2026-08-18',
+  'A las 2:33 a.m. el día operativo sigue siendo el del turno que acaba de cerrar');
+igual(await M.diaOperativoActual(new Date('2026-08-19T13:00:00Z')), '2026-08-19',
+  'A las 9:00 a.m. ya es el día nuevo');
+anotar(await M.diaOperativoActual(new Date('2026-08-19T06:33:00Z')) !== M.fechaPR(new Date('2026-08-19T06:33:00Z')),
+  'De madrugada el día operativo y la fecha del calendario NO coinciden: por eso no se pueden intercambiar');
+
 igual(M.sumarDias('2026-03-01', -1), '2026-02-28', 'Restar un día cruza el fin de mes');
 igual(M.sumarDias('2024-03-01', -1), '2024-02-29', 'Respeta el año bisiesto');
 

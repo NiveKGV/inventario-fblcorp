@@ -4,8 +4,8 @@
     {
       "name": "almacen",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8787"],
-      "port": 8787
+      "runtimeArgs": ["herramientas/servidor-dev.py", "8788"],
+      "port": 8788
     }
   ]
 }
