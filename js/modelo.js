@@ -66,7 +66,7 @@ function sumarDias(diaISO, n) {
 const ESTADOS = {
   agotado: { clave: 'agotado', etiqueta: 'Agotado', orden: 0 },
   critico: { clave: 'critico', etiqueta: 'Hay que ordenar', orden: 1 },
-  bajo: { clave: 'bajo', etiqueta: 'Bajo el par', orden: 2 },
+  bajo: { clave: 'bajo', etiqueta: 'Bajo el máximo', orden: 2 },
   ok: { clave: 'ok', etiqueta: 'En nivel', orden: 3 },
 };
 

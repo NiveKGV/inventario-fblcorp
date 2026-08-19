@@ -19,7 +19,7 @@ import {
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
-  brindis, ocultarBrindis, numero, normalizar,
+  brindis, ocultarBrindis, numero, normalizar, activarComportamientoDeCampos,
 } from './ui.js';
 import { abrirAdmin, salirAdmin } from './admin.js';
 
@@ -780,6 +780,11 @@ $('#admin-salir').onclick = () => { salirAdmin(); mostrarAcceso(); };
 /* Un dedo apoyado en el vidrio no debe hacer zoom ni seleccionar texto. */
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('dblclick', (e) => e.preventDefault());
+
+/* Se engancha una sola vez sobre `document` y cubre toda la app, incluidos los
+   campos que se crean después: los de Conteo físico se pintan cada vez que se
+   entra a la pestaña, y con listeners por campo se olvidaría alguno. */
+activarComportamientoDeCampos();
 
 /* El service worker es lo que hace que la app abra sin internet en el iPad,
    pero en desarrollo sirve archivos viejos y hace perder horas persiguiendo

@@ -133,11 +133,11 @@ Tres cosas que conviene saber:
    entró (no lo que se pidió — lo que llegó).
 4. **Si llegó algo que no estaba en la lista** —una caja de más, un producto
    nuevo, algo para un evento— búscalo en el encasillado de arriba y añádelo.
-   Se puede recibir cualquier producto, esté bajo el par o no.
+   Se puede recibir cualquier producto, esté bajo el máximo o no.
 5. Escribe el proveedor o el número de factura.
 6. Toca **Registrar entrada al almacén**.
 
-Aunque no haya nada bajo el par, la pantalla deja recibir igual.
+Aunque no haya nada bajo el máximo, la pantalla deja recibir igual.
 
 ---
 
@@ -220,7 +220,7 @@ y para qué restaurante. Tocando la fila se abre el desglose de lo que se llevó
 El botón **Revertir** deshace la operación completa, no un producto suelto — por
 eso está en la fila y no en cada renglón.
 
-En **Resumen**, las tarjetas de arriba (agotados, hay que ordenar, bajo el par,
+En **Resumen**, las tarjetas de arriba (agotados, hay que ordenar, bajo el máximo,
 lo que salió hoy, valor del inventario) **se tocan** y muestran exactamente
 cuáles son esos productos, sin tener que irse a otra pestaña.
 

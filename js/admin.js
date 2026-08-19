@@ -249,8 +249,8 @@ async function vistaResumen() {
         'Hay que ordenar', 'Llegaron al mínimo. Piden ya.',
         enEstado('critico'), { conOrden: true },
       )),
-      dato(numero(alertas.bajos), 'bajo el par', alertas.bajos ? 'aviso' : '', () => modalProductos(
-        'Bajo el par', 'Todavía alcanzan, pero están por debajo de lo que debería haber.',
+      dato(numero(alertas.bajos), 'bajo el máximo', alertas.bajos ? 'aviso' : '', () => modalProductos(
+        'Bajo el máximo', 'Todavía alcanzan, pero están por debajo de lo que debería haber.',
         enEstado('bajo'), { conOrden: true },
       )),
       dato(numero(salidasHoy), 'botellas salieron hoy', '', () => modalSalidasHoy(movsHoy)),
@@ -517,7 +517,7 @@ async function vistaCompra() {
   return el('div', {}, [
     seccion('Lista de compra',
       lista.length
-        ? `${lista.length} productos bajo el par · ${totalUnidades} unidades sugeridas · ${dinero(totalCosto)} estimado a costo.`
+        ? `${lista.length} productos bajo el máximo · ${totalUnidades} unidades sugeridas · ${dinero(totalCosto)} estimado a costo.`
         : 'Todo el inventario está en nivel: no hay nada que ordenar hoy. Si aun así llega mercancía, se recibe abajo.',
       lista.length ? el('div', { clase: 'seccion-barra' }, [
         el('span', { clase: 'crece' }),

@@ -23,6 +23,17 @@ function el(etiqueta, props = {}, hijos = []) {
     else if (v === true) nodo.setAttribute(k, '');
     else if (v !== false && v != null) nodo.setAttribute(k, v);
   }
+  /* En los campos de cantidad y de búsqueda no hay nada que enviar al pulsar
+     Enter, así que la tecla de retorno del iPad debe decir "Listo" y cerrar el
+     teclado (el cierre lo hace `activarComportamientoDeCampos`). Se pone acá y
+     no al enfocar el campo porque así queda escrito al construirlo, sin
+     depender de un evento. Las contraseñas y los códigos de acceso quedan
+     fuera: ahí Enter sí tiene una acción propia. */
+  if (etiqueta === 'input' && (props.type === 'number' || props.type === 'search')
+      && props.enterkeyhint == null) {
+    nodo.setAttribute('enterkeyhint', 'done');
+  }
+
   for (const h of [].concat(hijos)) {
     if (h == null || h === false) continue;
     nodo.append(typeof h === 'string' || typeof h === 'number' ? String(h) : h);
@@ -164,9 +175,60 @@ function aCSV(filas) {
   return `﻿${filas.map((f) => f.map(escapar).join(',')).join('\r\n')}`;
 }
 
+/* --- Comportamiento de los campos de escritura en el iPad --- */
+
+const SELECTOR_INTERACTIVO = 'input, select, textarea, button, label, a, [contenteditable], .admin-tab';
+
+function esCampoDeTexto(n) {
+  return n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement;
+}
+
+/* Tres arreglos a un mismo problema: escribir una cantidad en el iPad y no
+   poder salir del campo.
+
+   1. Tocar afuera no soltaba el cursor. No es falta de sensibilidad de la
+      pantalla: Safari en iOS **no genera un evento de clic** cuando se toca
+      una zona que no es interactiva, así que el navegador nunca se enteraba
+      del toque y el campo no perdía el foco. Había que tocar dos veces, o
+      atinarle justo a otro control. `pointerdown` sí llega siempre, y en fase
+      de captura llega antes que nada. Los toques sobre algo interactivo se
+      dejan pasar intactos: soltar el foco ahí mueve el teclado a mitad del
+      gesto y el toque termina cayendo en el elemento equivocado.
+
+   2. Enter no cerraba el teclado. Ahora lo hace en los campos numéricos y de
+      búsqueda, donde no hay nada que enviar. La tecla dice "Listo" gracias al
+      `enterkeyhint` que `el()` les pone al construirlos.
+
+   3. Corregir un número obligaba a borrar dígito por dígito. Al entrar a un
+      campo numérico se selecciona lo que ya está escrito, así que teclear lo
+      reemplaza —como en cualquier hoja de cálculo—. */
+function activarComportamientoDeCampos() {
+  document.addEventListener('pointerdown', (ev) => {
+    const activo = document.activeElement;
+    if (!esCampoDeTexto(activo)) return;
+    const destino = ev.target instanceof Element ? ev.target.closest(SELECTOR_INTERACTIVO) : null;
+    if (destino) return;
+    activo.blur();
+  }, true);
+
+  document.addEventListener('focusin', (ev) => {
+    const n = ev.target;
+    if (!(n instanceof HTMLInputElement) || n.type !== 'number') return;
+    // select() en el mismo turno lo pisa el propio gesto del toque en iOS.
+    setTimeout(() => { if (document.activeElement === n) n.select(); }, 0);
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    const n = ev.target;
+    if (n instanceof HTMLInputElement && (n.type === 'number' || n.type === 'search')) n.blur();
+  });
+}
+
 export {
   $, $$, el, mostrarPantalla, pantallaActual,
   abrirModal, cerrarModal, modalAbierto, confirmar,
   brindis, ocultarBrindis,
   dinero, numero, normalizar, descargar, aCSV,
+  activarComportamientoDeCampos,
 };
