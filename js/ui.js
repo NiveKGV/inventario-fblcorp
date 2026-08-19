@@ -155,10 +155,36 @@ function normalizar(texto) {
   return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-/* Descarga un archivo. En iPad esto abre la hoja de compartir para guardarlo en
-   Archivos o iCloud Drive: es el único camino que iOS permite a una app web. */
-function descargar(nombreArchivo, contenido, tipo = 'application/json') {
+/* Entrega un archivo al iPad para guardarlo en Archivos, mandarlo por correo o
+   pasarlo a otro aparato.
+
+   Por qué no basta con un enlace de descarga: en iOS, un `<a download>` saca al
+   usuario de la app para abrir el archivo en otra vista. Al volver, iOS relanza
+   la app desde cero y muestra su pantalla de arranque —blanca— antes de que
+   nada nuestro pueda pintar. No hay CSS que arregle eso, porque ocurre fuera de
+   la página. Lo que sí se puede es no hacer el viaje.
+
+   `navigator.share` presenta la hoja de compartir ENCIMA de la app, sin
+   sacarla de memoria: no hay relanzamiento y por lo tanto no hay fogonazo. Se
+   cae al enlace de siempre si el navegador no la trae o no acepta archivos, que
+   es lo que pasa en el escritorio. */
+async function descargar(nombreArchivo, contenido, tipo = 'application/json') {
   const blob = new Blob([contenido], { type: `${tipo};charset=utf-8` });
+
+  try {
+    const archivo = new File([blob], nombreArchivo, { type: `${tipo};charset=utf-8` });
+    if (navigator.canShare?.({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: nombreArchivo });
+      return;
+    }
+  } catch (e) {
+    // Cancelar la hoja de compartir lanza AbortError. Es una decisión del
+    // usuario, no un fallo: no se cae al enlace, porque eso le entregaría el
+    // archivo justo después de que dijo que no.
+    if (e && e.name === 'AbortError') return;
+    // Cualquier otro fallo (permiso, gesto expirado) sigue al camino de abajo.
+  }
+
   const url = URL.createObjectURL(blob);
   const a = el('a', { href: url, download: nombreArchivo });
   document.body.append(a);

@@ -78,6 +78,41 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .pantalla { display: none; height: 100%; flex-direction: column; min-height: 0; }
 .pantalla.activa { display: flex; }
 
+/* La pantalla de carga salía descentrada, abajo a la derecha, durante el
+   arranque en el iPad. El `height: 100%` de arriba cuelga de una cadena de tres
+   ancestros (html → body → #app → .pantalla), y mientras iOS todavía está
+   acomodando la ventana al abrir en horizontal, esa cadena se resuelve contra
+   un tamaño que ya no es el bueno. Se corrige sola un instante después, y eso
+   es justo lo que se ve como un fallo.
+
+   `position: fixed` con `inset: 0` no cuelga de nadie: se ancla a la ventana y
+   se recalcula en cada cambio de tamaño u orientación. */
+#pantalla-carga.activa {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+/* Y que no se asome siquiera si la base abre rápido, que es lo normal. Un
+   indicador de carga que dura dos parpadeos no informa de nada: solo hace que
+   la app parezca que falló al abrir. Si de verdad tarda, aparece a los 400 ms.
+   Va en CSS y no en JavaScript porque el retraso tiene que empezar a contar
+   desde el primer pintado, antes de que corra ningún módulo. */
+#pantalla-carga .marca {
+  opacity: 0;
+  animation: asomar-carga 140ms ease-out 400ms forwards;
+  /* En las demás pantallas la marca lleva margen abajo porque le sigue un
+     formulario. Acá no le sigue nada, y ese margen la deja 15px sobre el
+     centro. */
+  margin-bottom: 0;
+}
+
+@keyframes asomar-carga { to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  #pantalla-carga .marca { animation-duration: 1ms; }
+}
+
 .barra {
   display: flex;
   align-items: center;
