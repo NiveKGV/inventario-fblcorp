@@ -77,6 +77,101 @@ async function derivarCodigo(codigo, salBase64) {
   return aBase64(bits);
 }
 
+/* --- Cifrado del archivo de respaldo --- */
+
+/* Por qué existe: el respaldo lleva los nombres del personal, el historial
+   completo y los códigos cifrados de todos. Con la sal compartida, un solo
+   recorrido de las 100.000 combinaciones de 5 dígitos los rompe todos a la vez
+   —medido, 37 minutos en una laptop normal—. Quien consiga ese archivo sabe el
+   código de cada empleado, y con eso saca botellas a nombre de otro: justo lo
+   que este sistema existe para impedir. Cifrarlo hace que el archivo no valga
+   nada sin la frase.
+
+   Más iteraciones que en los códigos de acceso (210.000) porque los papeles se
+   invierten: un código se comprueba en cada entrada al almacén y la espera la
+   paga una persona de pie; una frase de respaldo se escribe una vez por semana
+   y el que va a pagar la espera es quien intente romperla sin conocerla.
+
+   AES-GCM y no AES-CBC: GCM autentica además de cifrar, así que un archivo
+   manipulado falla al abrirse en vez de descifrar basura silenciosamente. Sal e
+   IV nuevos en cada respaldo: repetir un IV con la misma clave rompe GCM. */
+const ITER_RESPALDO = 310000;
+
+async function claveDeRespaldo(frase, sal, uso) {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(frase), 'PBKDF2', false, ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2', salt: sal, iterations: ITER_RESPALDO, hash: 'SHA-256',
+    },
+    material, { name: 'AES-GCM', length: 256 }, false, [uso],
+  );
+}
+
+/* El sobre guarda cómo se cifró, no solo lo cifrado: si algún día cambian las
+   iteraciones o el algoritmo, los archivos viejos se siguen abriendo porque
+   traen sus propios parámetros. Un respaldo que solo se pueda abrir con la
+   versión de la app que lo generó no es un respaldo. */
+async function cifrarRespaldo(texto, frase, pista = '') {
+  exigirContextoSeguro();
+  const sal = crypto.getRandomValues(new Uint8Array(LARGO_SAL));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const clave = await claveDeRespaldo(frase, sal, 'encrypt');
+  const cifrado = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, clave, new TextEncoder().encode(texto),
+  );
+  return {
+    formato: 'almacen-licores/respaldo-cifrado',
+    version: 1,
+    generado: new Date().toISOString(),
+    // La pista viaja SIN cifrar, que es lo único que la hace útil el día que
+    // nadie recuerda la frase. Por eso no debe contener la frase.
+    pista,
+    cifrado: {
+      algoritmo: 'AES-GCM',
+      kdf: 'PBKDF2-SHA256',
+      iteraciones: ITER_RESPALDO,
+      sal: aBase64(sal),
+      iv: aBase64(iv),
+    },
+    datos: aBase64(cifrado),
+  };
+}
+
+async function descifrarRespaldo(sobre, frase) {
+  exigirContextoSeguro();
+  if (!esRespaldoCifrado(sobre)) throw new Error('El archivo no es un respaldo cifrado de este sistema.');
+  const { sal, iv, iteraciones } = sobre.cifrado;
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(frase), 'PBKDF2', false, ['deriveKey'],
+  );
+  const clave = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2', salt: deBase64(sal), iterations: iteraciones || ITER_RESPALDO, hash: 'SHA-256',
+    },
+    material, { name: 'AES-GCM', length: 256 }, false, ['decrypt'],
+  );
+  let plano;
+  try {
+    plano = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: deBase64(iv) }, clave, deBase64(sobre.datos),
+    );
+  } catch {
+    /* AES-GCM no distingue «frase equivocada» de «archivo alterado»: en los dos
+       casos falla la verificación. Se dicen las dos posibilidades en vez de
+       adivinar una, porque mandar a alguien a buscar otra frase cuando lo que
+       tiene es un archivo corrupto le hace perder la tarde. */
+    throw new Error('La frase no abre este archivo. Puede estar mal escrita, o el archivo puede estar dañado.');
+  }
+  return new TextDecoder().decode(plano);
+}
+
+function esRespaldoCifrado(obj) {
+  return !!obj && obj.formato === 'almacen-licores/respaldo-cifrado'
+    && !!obj.cifrado && typeof obj.datos === 'string';
+}
+
 /* Comparación en tiempo constante para no filtrar información por la duración. */
 function igualesConstante(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
@@ -98,4 +193,5 @@ function codigoDebil(codigo) {
 export {
   nuevaSal, derivarCodigo, igualesConstante, codigoDebil,
   contextoSeguro, LARGO_CODIGO, ITERACIONES,
+  cifrarRespaldo, descifrarRespaldo, esRespaldoCifrado,
 };

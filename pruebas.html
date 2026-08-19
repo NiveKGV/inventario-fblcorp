@@ -349,6 +349,55 @@ anotar((await DB.todos('productos')).length > 0,
   'Restaurar en un iPad vacío sigue reponiendo el catálogo completo');
 
 /* ------------------------------------------------------------------ */
+seccion('Cifrado del respaldo');
+
+/* El archivo lleva los nombres del personal, el historial y los códigos de
+   todos. Con la sal compartida, un solo recorrido de las 100.000 combinaciones
+   de 5 dígitos los rompe todos a la vez. Cifrarlo hace que no valga nada sin la
+   frase — y eso solo sirve si la frase correcta abre y la equivocada no. */
+const Cripto = await import('./js/cripto.js');
+
+const claro = JSON.stringify(await DB.exportarTodo());
+const sobre = await Cripto.cifrarRespaldo(claro, 'almacen 2026', 'la primera barra');
+
+anotar(Cripto.esRespaldoCifrado(sobre), 'El sobre se reconoce como respaldo cifrado');
+/* Se DECODIFICA el base64 antes de buscar. Mirar el JSON tal cual no prueba
+   nada: base64 ya esconde el texto de una búsqueda simple, así que esta prueba
+   pasaba igual con el cifrado desactivado —comprobado rompiéndolo a propósito—.
+   Lo que hay que verificar es que debajo del base64 tampoco esté el texto. */
+const crudo = atob(sobre.datos);
+anotar(!/Luis Ortiz|Jack Daniel|almacen-licores/.test(crudo),
+  'Bajo el base64 no queda ni un nombre del personal ni del catálogo: está cifrado de verdad');
+igual(sobre.pista, 'la primera barra',
+  'La pista viaja SIN cifrar: es lo único que sirve el día que nadie recuerda la frase');
+anotar(sobre.cifrado.iteraciones >= 210000, 'El derivado de la frase no se abarata por debajo del de los códigos');
+
+igual(await Cripto.descifrarRespaldo(sobre, 'almacen 2026'), claro,
+  'La frase correcta devuelve exactamente lo que se cifró');
+
+await lanza(
+  () => Cripto.descifrarRespaldo(sobre, 'almacen 2027'),
+  'no abre este archivo', 'La frase equivocada no abre el respaldo',
+);
+
+/* Sal e IV nuevos en cada respaldo: repetir un IV con la misma clave rompe
+   AES-GCM, y una sal fija dejaría precalcular el ataque contra todos los
+   respaldos del cliente de una vez. */
+const otro = await Cripto.cifrarRespaldo(claro, 'almacen 2026');
+anotar(otro.cifrado.sal !== sobre.cifrado.sal && otro.cifrado.iv !== sobre.cifrado.iv,
+  'Dos respaldos con la misma frase usan sal e IV distintos');
+anotar(otro.datos !== sobre.datos,
+  'El mismo contenido con la misma frase no produce el mismo cifrado dos veces');
+
+/* AES-GCM autentica además de cifrar: un archivo tocado tiene que fallar al
+   abrirse, no descifrar basura en silencio y meterla en el inventario. */
+const alterado = { ...sobre, datos: `${sobre.datos.slice(0, -8)}AAAAAAAA` };
+await lanza(
+  () => Cripto.descifrarRespaldo(alterado, 'almacen 2026'),
+  'no abre este archivo', 'Un archivo alterado se rechaza en vez de descifrarse a medias',
+);
+
+/* ------------------------------------------------------------------ */
 seccion('Reversiones');
 
 const revertible = await producto('Revertible', 20);

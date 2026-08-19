@@ -248,3 +248,47 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
   restaurantes durante esa semana más un colchón. En el Inventario aparece el
   consumo promedio semanal real para que ese número no sea a ojo.
 - Cuando des de baja a un empleado, todo lo que sacó se conserva en el historial.
+
+
+## El respaldo cifrado
+
+Al tocar **Respaldar ahora** el sistema pregunta si quieren cifrar el archivo.
+
+**Cifrado (recomendado).** Se escribe una frase, se repite, y el archivo queda
+inservible para quien no la sepa. El archivo lleva los nombres del personal, el
+historial completo y los códigos de todos: cifrarlo es lo que evita que sirva
+de algo si termina en el correo de alguien o en una cuenta ajena.
+
+**Sin cifrar.** El archivo se abre con cualquier programa. Solo tiene sentido si
+va a un sitio que ustedes controlan y no sale de ahí.
+
+### Lo que hay que entender antes de escoger
+
+**Si pierden la frase, el respaldo no se recupera. Nunca.** Aquí no hay servidor
+que la guarde ni forma de restablecerla, y no existe nadie —tampoco quien
+programó esto— que pueda abrir ese archivo sin ella.
+
+Por eso:
+
+- La frase se escribe **dos veces**. Un dedazo no se nota hasta el día que hace
+  falta el respaldo, que es el peor día para descubrirlo.
+- Se puede guardar una **pista**, que viaja sin cifrar dentro del archivo y
+  aparece cuando se va a restaurar. La pista no debe ser la frase.
+- **Anoten la frase donde se anotan las cosas del negocio**, no solo en la
+  cabeza de una persona. Si esa persona no está el día del problema, el respaldo
+  tampoco.
+- Usen **la misma frase siempre**. Una frase distinta cada semana es una lista
+  de frases que recordar, y ahí es donde se pierden.
+
+Al generar un respaldo cifrado, el sistema lo abre él mismo para comprobarlo
+antes de entregárselo. Si algo hubiera salido mal, se enteran en ese momento y
+no el día del desastre.
+
+### Restaurar
+
+Se escoge el archivo igual que siempre. Si está cifrado, el sistema pide la
+frase y muestra la pista si el archivo trae una. Con la frase equivocada no pasa
+nada: avisa y el iPad se queda como estaba.
+
+Los respaldos hechos antes de que existiera el cifrado se siguen abriendo sin
+pedir nada.
