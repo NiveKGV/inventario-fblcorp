@@ -23,15 +23,15 @@ function el(etiqueta, props = {}, hijos = []) {
     else if (v === true) nodo.setAttribute(k, '');
     else if (v !== false && v != null) nodo.setAttribute(k, v);
   }
-  /* En los campos de cantidad y de búsqueda no hay nada que enviar al pulsar
-     Enter, así que la tecla de retorno del iPad debe decir "Listo" y cerrar el
-     teclado (el cierre lo hace `activarComportamientoDeCampos`). Se pone acá y
-     no al enfocar el campo porque así queda escrito al construirlo, sin
-     depender de un evento. Las contraseñas y los códigos de acceso quedan
-     fuera: ahí Enter sí tiene una acción propia. */
-  if (etiqueta === 'input' && (props.type === 'number' || props.type === 'search')
-      && props.enterkeyhint == null) {
-    nodo.setAttribute('enterkeyhint', 'done');
+  /* Qué dice la tecla de retorno del iPad. En un campo de cantidad, "Siguiente"
+     —Enter salta al próximo, y `activarComportamientoDeCampos` lo corrige a
+     "Listo" si resulta ser el último de la lista—. En el buscador, "Listo",
+     porque ahí Enter solo cierra el teclado. Se escribe al construir el campo
+     para no depender de un evento. Las contraseñas y los códigos de acceso
+     quedan fuera: ahí Enter tiene una acción propia. */
+  if (etiqueta === 'input' && props.enterkeyhint == null) {
+    if (props.type === 'number') nodo.setAttribute('enterkeyhint', 'next');
+    else if (props.type === 'search') nodo.setAttribute('enterkeyhint', 'done');
   }
 
   for (const h of [].concat(hijos)) {
@@ -195,13 +195,17 @@ function esCampoDeTexto(n) {
       dejan pasar intactos: soltar el foco ahí mueve el teclado a mitad del
       gesto y el toque termina cayendo en el elemento equivocado.
 
-   2. Enter no cerraba el teclado. Ahora lo hace en los campos numéricos y de
-      búsqueda, donde no hay nada que enviar. La tecla dice "Listo" gracias al
-      `enterkeyhint` que `el()` les pone al construirlos.
+   2. Enter obligaba a seleccionar el próximo campo a mano. En un conteo
+      físico se va fila por fila con las manos ocupadas, así que Enter salta
+      al siguiente campo de cantidad y selecciona lo que tenga, como en una
+      hoja de cálculo. En el último ya no hay a dónde saltar y cierra el
+      teclado. La tecla lo dice: "Siguiente" mientras queden campos, "Listo"
+      en el último. En el buscador siempre cierra, porque no encabeza ninguna
+      columna que recorrer.
 
    3. Corregir un número obligaba a borrar dígito por dígito. Al entrar a un
       campo numérico se selecciona lo que ya está escrito, así que teclear lo
-      reemplaza —como en cualquier hoja de cálculo—. */
+      reemplaza. */
 function activarComportamientoDeCampos() {
   document.addEventListener('pointerdown', (ev) => {
     const activo = document.activeElement;
@@ -214,6 +218,7 @@ function activarComportamientoDeCampos() {
   document.addEventListener('focusin', (ev) => {
     const n = ev.target;
     if (!(n instanceof HTMLInputElement) || n.type !== 'number') return;
+    n.setAttribute('enterkeyhint', siguienteCampoNumerico(n) ? 'next' : 'done');
     // select() en el mismo turno lo pisa el propio gesto del toque en iOS.
     setTimeout(() => { if (document.activeElement === n) n.select(); }, 0);
   });
@@ -221,8 +226,30 @@ function activarComportamientoDeCampos() {
   document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Enter') return;
     const n = ev.target;
-    if (n instanceof HTMLInputElement && (n.type === 'number' || n.type === 'search')) n.blur();
+    if (!(n instanceof HTMLInputElement)) return;
+    if (n.type === 'search') { n.blur(); return; }
+    if (n.type !== 'number') return;
+
+    const siguiente = siguienteCampoNumerico(n);
+    if (!siguiente) { n.blur(); return; }
+    // Sin esto el iPad interpreta el Enter además como envío y recarga.
+    ev.preventDefault();
+    siguiente.focus();
+    siguiente.select();
+    // `focus()` ya lo trae a la vista, pero con el teclado ocupando media
+    // pantalla el campo puede quedar justo debajo del borde.
+    siguiente.scrollIntoView({ block: 'nearest' });
   });
+}
+
+/* El próximo campo de cantidad en el orden en que se ven en pantalla. Se
+   descartan los ocultos porque la tabla se filtra con el buscador: saltar a un
+   campo que no está a la vista deja al usuario escribiendo a ciegas. */
+function siguienteCampoNumerico(actual) {
+  const campos = [...document.querySelectorAll('input[type="number"]')]
+    .filter((c) => !c.disabled && !c.readOnly && c.offsetParent !== null);
+  const i = campos.indexOf(actual);
+  return i >= 0 && i < campos.length - 1 ? campos[i + 1] : null;
 }
 
 export {
