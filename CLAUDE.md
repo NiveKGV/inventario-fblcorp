@@ -104,12 +104,28 @@ python3 herramientas/generar-iconos.py
 
 ## Publicación
 
-La app está publicada en <https://nivekgv.github.io/inventario-fblcorp/>
-(GitHub Pages, rama `main`, raíz del repo). El iPad la instala desde ahí.
+La app se publica en **Netlify**, un sitio por cliente, con la configuración en
+`netlify.toml`. El iPad la instala desde la dirección de su cliente.
 
-Existe porque **Web Crypto y el service worker solo funcionan en contexto
-seguro**: HTTPS o `localhost`. Servir el proyecto desde la red local por
-`http://192.168.x.x` carga la pantalla pero deja los códigos de acceso muertos.
+**Un sitio por cliente no es cosmético, es aislamiento de datos.** IndexedDB se
+separa por origen. En `usuario.github.io` todos los proyectos comparten origen,
+así que dos clientes publicados como subdirectorios del mismo usuario escriben
+en el mismo cajón. Con un sitio por cliente, cada uno tiene su propio origen y
+la información de un negocio no puede cruzarse con la de otro.
+
+Regla de operación que va con esto: **un solo repositorio fuente, publicado a
+varios destinos.** Nunca una copia del repo por cliente — con tres copias, una
+corrección hay que hacerla tres veces y siempre se olvida una.
+
+Todo esto existe porque **Web Crypto y el service worker solo funcionan en
+contexto seguro**: HTTPS o `localhost`. Servir el proyecto desde la red local
+por `http://192.168.x.x` carga la pantalla pero deja los códigos de acceso
+muertos.
+
+Al mudar un iPad de dirección, sus datos **no viajan**: viven en el origen
+viejo. Se instala desde la dirección nueva antes de cargar el catálogo, y se
+borra el icono viejo de la pantalla de inicio — si alguien abre la dirección
+anterior, escribe en una base que ya nadie mira.
 
 Para publicar una corrección:
 
@@ -124,9 +140,15 @@ el cambio de versión es lo que descarta el caché viejo.
 Detalles que sostienen esta publicación y no hay que romper:
 
 - **Todas las rutas son relativas** (`./index.html`, `sw.js`, `js/app.js`).
-  Pages sirve desde un subdirectorio, no desde la raíz del dominio: una sola
-  ruta absoluta rompe el sitio entero.
-- **`.nojekyll`** evita que Pages procese el repo como un blog de Jekyll.
+  Es lo que permite que el mismo repo se publique en la raíz de un sitio o en un
+  subdirectorio sin cambiar nada. Una sola ruta absoluta ata el proyecto a una
+  dirección y rompe las demás.
+- **Las cabeceras viven en `netlify.toml`**, y la de caché corrige un error real:
+  GitHub Pages servía todo con `max-age=600`, así que durante diez minutos
+  después de publicar el iPad recibía el archivo viejo creyendo que iba a la red.
+  `sw.js` no se guarda nunca — es el archivo que decide qué versión corre.
+- **`.nojekyll`** sobra en Netlify; se queda por si alguna vez se sirve el repo
+  desde Pages otra vez (una demo tuya, por ejemplo).
 - **`noindex` en `index.html` y `robots.txt`** — el repo es público, pero el
   sitio no tiene por qué salir en buscadores.
 - **Los códigos de los empleados de ejemplo se sortean al instalar** y se

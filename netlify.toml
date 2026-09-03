@@ -1,0 +1,69 @@
+# Publicación en Netlify.
+#
+# Por qué Netlify y no GitHub Pages: en `usuario.github.io` todos los proyectos
+# comparten el mismo origen, y IndexedDB se aísla por origen. Con dos clientes
+# publicados en subdirectorios del mismo usuario, sus datos viven en el mismo
+# cajón. Aquí cada cliente recibe su propio sitio y su propio origen, que es lo
+# único que separa de verdad la información de un negocio de la de otro.
+#
+# No hay compilación: el sitio es la carpeta tal cual. Si algún día alguien
+# añade un `package.json`, esto sigue sin ejecutarlo — y así debe quedarse.
+
+[build]
+  publish = "."
+
+# --- Caché ---
+#
+# Esta sección es la corrección de un error real, no una precaución teórica.
+# GitHub Pages servía todo con `max-age=600`. Un `fetch()` —también dentro del
+# service worker— se sirve de la caché HTTP del navegador, así que durante diez
+# minutos después de publicar el iPad creía estar pidiendo a la red y recibía el
+# archivo viejo. Una corrección subida no llegaba al aparato.
+#
+# `must-revalidate` con `max-age=0` no significa "no guardes": significa
+# "pregunta antes de usar". El navegador conserva la copia y Netlify responde
+# 304 si no cambió, así que no se pierde velocidad — solo se pierde la
+# posibilidad de servir algo viejo sin preguntar.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+    # El repositorio es público y el sitio lleva nombres de restaurantes reales.
+    # `robots.txt` pide no indexar; esta cabecera lo exige, y a diferencia del
+    # archivo también cubre a quien llegue por un enlace directo.
+    X-Robots-Tag = "noindex, nofollow"
+
+    # Sin esto, un archivo servido con el tipo equivocado puede terminar
+    # ejecutándose como script.
+    X-Content-Type-Options = "nosniff"
+
+    # La app no se muestra dentro de otra página. Nadie tiene por qué montar
+    # esta pantalla dentro de un iframe suyo.
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+
+    # Nada de esto se usa, y apagarlo evita que un descuido futuro lo encienda.
+    Permissions-Policy = "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
+
+    # Política de contenido. La app no carga nada de fuera: cero dependencias,
+    # cero CDN, cero tipografías externas. Eso permite cerrarlo casi todo.
+    #
+    # `'unsafe-inline'` en style-src es por el <style> de index.html que pinta el
+    # fondo oscuro antes de que cargue la hoja de estilos —el que evita el
+    # destello blanco al abrir—. No hay ningún script inline ni manejadores
+    # onclick, así que script-src sí queda estricto, que es lo que importa.
+    #
+    # blob: en connect-src es para el archivo de respaldo y el CSV: se arman en
+    # memoria y se entregan como blob cuando el iPad no ofrece la hoja de
+    # compartir.
+    Content-Security-Policy = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' blob:; manifest-src 'self'; worker-src 'self'"
+
+# El service worker decide qué versión de la app corre. Si se sirve una copia
+# guardada, el aparato puede quedarse en una versión vieja para siempre, porque
+# es justamente el archivo que tendría que traer la nueva. Nunca se guarda.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
