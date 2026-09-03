@@ -107,6 +107,9 @@ python3 herramientas/generar-iconos.py
 La app se publica en **Netlify**, un sitio por cliente, con la configuración en
 `netlify.toml`. El iPad la instala desde la dirección de su cliente.
 
+Fabula Corp.: <https://inventario-fabula.netlify.app/> (despliega solo al hacer
+push a `main`).
+
 **Un sitio por cliente no es cosmético, es aislamiento de datos.** IndexedDB se
 separa por origen. En `usuario.github.io` todos los proyectos comparten origen,
 así que dos clientes publicados como subdirectorios del mismo usuario escriben
