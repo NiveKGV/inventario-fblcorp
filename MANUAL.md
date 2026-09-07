@@ -7,7 +7,7 @@ En la pantalla de inicio del iPad la app aparece como **Inventario**.
 
 ## 1. Instalarlo en el iPad
 
-1. Abre **Safari** en el iPad y entra a la dirección del sistema.
+1. Abre **Safari** en el iPad y entra a **inventario-fabula.netlify.app**
 2. Toca el botón de **Compartir** (el cuadrito con la flecha hacia arriba).
 3. Toca **Añadir a pantalla de inicio** y luego **Añadir**.
 4. Cierra Safari. De ahora en adelante se abre desde el icono de la botella.
@@ -18,7 +18,7 @@ usarse. Las apps añadidas a la pantalla de inicio están fuera de esa regla.
 Si lo usan como pestaña de Safari, un fin de semana largo puede costarles el
 inventario completo.
 
-Esto no sustituye el respaldo (punto 9). Nada de lo que hace iOS por su cuenta
+Esto no sustituye el respaldo (punto 10). Nada de lo que hace iOS por su cuenta
 es una copia de seguridad que puedas dar por garantizada.
 
 ---
@@ -106,8 +106,14 @@ hay que entrarlos uno por uno.
 1. Llena la plantilla de Excel: producto, categoría, tamaño, costo, existencia
    de hoy y **cuánto se pide en un mes típico** de cada uno. Con ese último
    dato el sistema calcula solo el máximo y el mínimo.
-2. En Excel: **Archivo → Guardar como → CSV**, parado en la hoja «Catálogo».
-3. Guarda el archivo en iCloud Drive.
+2. Guárdala como CSV, **parado en la hoja «Catálogo»**. En Excel es
+   *Archivo → Guardar como → CSV*; en Numbers, *Archivo → Exportar a → CSV*,
+   que crea una carpeta con un archivo por hoja: se usa el que dice «Catálogo».
+   Si se sube por error la hoja de instrucciones, el sistema lo dice y no carga
+   nada.
+3. Pasa el archivo al iPad: iCloud Drive, AirDrop o correo. Este archivo solo
+   tiene nombres de licores, así que no hay problema en mandarlo por correo —
+   a diferencia del respaldo, que no debe salir por ahí.
 4. En el iPad: **Administración → Sistema → Importar catálogo**, escoge el
    archivo y toca **Revisar archivo**.
 5. Sale una pantalla de revisión: cuántos productos entran, cuáles se
@@ -122,6 +128,17 @@ Tres cosas que conviene saber:
 - **El máximo y el mínimo se calculan solos** con el pedido mensual. Si
   prefieres fijarlos a mano en algún producto, llena las columnas Máximo y
   Mínimo y esas mandan.
+- **Las categorías que no existan se crean.** La pantalla de revisión las lista
+  antes de guardar nada. Si una es un error de escritura de otra que ya existe,
+  se cancela y se corrige en el archivo — si no, quedan dos categorías que son
+  la misma cosa.
+
+### Añadir un producto suelto
+
+Para uno o dos no hace falta archivo: **Inventario → Agregar producto**. Si el
+licor es de una categoría que todavía no existe, en el menú de categorías se
+escoge **la opción de escribir una nueva** y se pone el nombre ahí mismo, sin
+salir de la pantalla.
 
 ---
 
@@ -154,6 +171,10 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
 
 La diferencia queda guardada con tu nombre. Nada se borra nunca.
 
+**Para ir más rápido:** después de escribir una cantidad, la tecla **intro** del
+teclado salta sola al próximo producto, sin tener que tocar la pantalla. Si
+estás filtrando con el buscador, salta solo entre los que se ven.
+
 ---
 
 ## 8. Cuando el licor lo baja la gerencia
@@ -185,7 +206,29 @@ que el conteo del sistema está mal: corrígelo en Conteo físico y vuelve.
 
 ---
 
-## 9. El respaldo — lo más importante de este manual
+## 9. Cuando un restaurante devuelve una botella
+
+Pasa seguido: bajaron una caja para un evento que se canceló, o pidieron de más
+y devuelven lo que quedó sin abrir.
+
+**Administración → Devoluciones:**
+
+1. Escoge el **restaurante que devuelve**.
+2. Escribe el **motivo** (botella sin abrir, pedido cancelado…). Es obligatorio.
+3. Busca los productos y pon cuántos devuelven en la columna **Devuelven**.
+4. Revisa y registra.
+
+La botella vuelve al almacén **y se le descuenta del consumo a ese restaurante**.
+Eso es lo que hace la diferencia con un conteo físico: si lo metes como conteo,
+la botella reaparece en el almacén pero el local se queda cargado con un licor
+que nunca se tomó, y el reparto de costos del mes le sale caro sin razón.
+
+Regla simple: **si sabes de qué local viene, es una devolución.** El conteo
+físico es para cuando el número no cuadra y no sabes por qué.
+
+---
+
+## 10. El respaldo — lo más importante de este manual
 
 **Todo vive dentro de ese iPad.** Si el iPad se pierde, se cae o alguien borra la
 app, se va el inventario y el historial completo. No hay copia en ninguna nube.
@@ -193,18 +236,38 @@ app, se va el inventario y el historial completo. No hay copia en ninguna nube.
 **Asigna una persona y un día fijo de la semana:**
 
 1. **Administración → Sistema → Respaldar ahora.**
-2. El iPad pregunta dónde guardarlo: escoge **iCloud Drive** (o mándalo por
-   correo).
-3. Listo. Toma diez segundos.
+2. El sistema pregunta si quieren **cifrar el archivo**. Digan que sí y escriban
+   la frase (el punto 13 explica esto en detalle).
+3. El iPad pregunta dónde guardarlo. Escoge **Guardar en Archivos → iCloud
+   Drive**, o pásalo a una computadora.
+4. Listo. Toma menos de un minuto.
+
+> **El respaldo no se manda por correo.** Ese archivo lleva los nombres de todo
+> el personal, el historial completo y los códigos de todos. Un correo pasa por
+> demasiadas manos y se queda guardado para siempre en dos buzones. Si tiene que
+> salir del iPad, que sea a una carpeta que ustedes controlen — y cifrado.
 
 Cuando pasan más de 7 días sin respaldo, aparece un aviso en Administración que
 no se quita hasta que lo hagas. Está puesto a propósito.
 
 Para recuperar todo en un iPad nuevo: **Sistema → Restaurar un respaldo**.
 
+### El respaldo no es lo mismo que el historial en Excel
+
+En esa misma pantalla hay un botón que dice **Exportar historial completo en
+CSV**. Son dos cosas distintas y conviene no confundirlas:
+
+| | Para qué sirve |
+|---|---|
+| **Respaldar ahora** | La copia de seguridad. Es lo único que devuelve el sistema si el iPad se pierde o se rompe. |
+| **Exportar historial completo en CSV** | Una hoja de cálculo para leer, imprimir o dársela al contable. **No sirve para restaurar nada.** |
+
+Si alguien piensa que exportando el CSV está protegido, no lo está. El día del
+problema ese archivo no devuelve el inventario.
+
 ---
 
-## 10. Los reportes
+## 11. Los reportes
 
 **Administración → Reportes.** Escoge el período y verás:
 
@@ -226,7 +289,7 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 
 ---
 
-## 11. Cosas que conviene saber
+## 12. Cosas que conviene saber
 
 - **Un código de 5 dígitos dice quién fue, no impide que alguien use el de otro.**
   Si alguien ve el código de un compañero, puede usarlo. Que cada quien lo
@@ -250,7 +313,9 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 - Cuando des de baja a un empleado, todo lo que sacó se conserva en el historial.
 
 
-## El respaldo cifrado
+---
+
+## 13. El respaldo cifrado, en detalle
 
 Al tocar **Respaldar ahora** el sistema pregunta si quieren cifrar el archivo.
 
