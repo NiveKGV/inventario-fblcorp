@@ -215,6 +215,11 @@ La diferencia queda guardada con tu nombre. Nada se borra nunca.
 teclado salta sola al próximo producto, sin tener que tocar la pantalla. Si
 estás filtrando con el buscador, salta solo entre los que se ven.
 
+**Si ese día entró mercancía**, aparece una columna **«Entró hoy»** con lo que
+llegó de cada producto. Está para evitar el susto de siempre: la tara dice 12,
+el sistema dice 8, y alguien se pasa media hora buscando un descuadre que no
+existe porque entraron 4 esa mañana.
+
 ---
 
 ## 8. Cuando el licor lo baja la gerencia
@@ -315,6 +320,14 @@ problema ese archivo no devuelve el inventario.
   sirve para repartir el costo del licor entre los cuatro locales.
 - Cuánto sacó **cada empleado**.
 - Cuáles fueron **los productos** que más salieron.
+- **Lo que entró al almacén**: qué se recibió, cuántas botellas, cuánto costó,
+  en cuántas órdenes llegó y cuándo fue la última. Es lo que contesta *"¿qué y
+  cuánto le pedimos al proveedor este mes?"* sin ir leyendo el historial.
+
+En el **Resumen** aparece **«Lo que más sale»** con los cinco licores de más
+movimiento en los últimos 30 días, y al lado cuántos entraron en esos mismos
+días. Salieron 40 y entraron 12 es la conversación que hay que tener con el
+proveedor, y separadas en dos pantallas esa resta no la hace nadie.
 
 Todo se puede exportar a Excel con **Exportar CSV**.
 

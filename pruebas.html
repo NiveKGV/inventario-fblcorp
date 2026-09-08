@@ -516,6 +516,28 @@ igual(M.localesDe({ restaurantes: [], restauranteId: 'la-o' }).join(), 'la-o',
 igual(M.localesDe({}).length, 0, 'Sin ningún local, la lista viene vacía');
 igual(M.localesDe(null).length, 0, 'Sin empleado tampoco revienta');
 
+/* --- Lo que entró al almacén --- */
+
+const movsEnt2 = [
+  { tipo: 'entrada', productoId: 'p1', delta: 12, costoUnitario: 20, fechaISO: '2026-09-01T10:00:00Z' },
+  { tipo: 'entrada', productoId: 'p1', delta: 6, costoUnitario: 20, fechaISO: '2026-09-08T10:00:00Z' },
+  { tipo: 'entrada', productoId: 'p2', delta: 4, costoUnitario: 50, fechaISO: '2026-09-03T10:00:00Z' },
+  { tipo: 'salida', productoId: 'p1', delta: -5, costoUnitario: 20, restauranteId: 'la-o', fechaISO: '2026-09-04T10:00:00Z' },
+  { tipo: 'devolucion', productoId: 'p1', delta: 2, costoUnitario: 20, restauranteId: 'la-o', fechaISO: '2026-09-05T10:00:00Z' },
+  { tipo: 'ajuste', productoId: 'p2', delta: 3, costoUnitario: 50, fechaISO: '2026-09-06T10:00:00Z' },
+];
+const ent = M.entradasPorProducto(movsEnt2);
+igual(ent.length, 2, 'Agrupa las entradas por producto');
+igual(ent[0].clave, 'p1', 'Ordena de más a menos botellas recibidas');
+igual(ent[0].unidades, 18, 'Suma las botellas de las dos órdenes del mismo producto (12 + 6)');
+igual(ent[0].valor, 360, 'El costo es las botellas por su costo unitario');
+igual(ent[0].veces, 2, 'Cuenta en cuántas órdenes llegó ese producto');
+igual(ent[0].ultima, '2026-09-08T10:00:00Z', 'Guarda la fecha de la última vez que entró');
+anotar(!ent.some((e) => e.clave === 'p2' && e.unidades !== 4),
+  'Un ajuste que sube existencia no cuenta como mercancía pedida');
+anotar(ent[0].unidades === 18,
+  'Una devolución de un local tampoco cuenta: ese licor ya se había comprado');
+
 const compra = await M.listaCompra();
 const enCompra = compra.find((p) => p.nombre === 'Contado');
 igual(enCompra.aOrdenar, 3, 'La cantidad a ordenar es el par menos lo que queda (10 - 7)');

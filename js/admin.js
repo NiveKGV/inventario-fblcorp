@@ -12,7 +12,8 @@ import {
 import { productosIniciales, empleadosEjemplo, alinearCategorias } from './datos.js';
 import {
   estadoStock, localesDe, registrarLote, revertirLote, productosActivos, listaCompra,
-  movimientosPeriodo, porRestaurante, porEmpleado, porProducto, consumoSemanal,
+  movimientosPeriodo, porRestaurante, porEmpleado, porProducto, entradasPorProducto,
+  consumoSemanal,
   resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, TIPOS,
 } from './modelo.js';
 import {
@@ -235,6 +236,14 @@ async function vistaResumen() {
   const movsHoy = await movimientosPeriodo(hoy, hoy);
   const salidasHoy = movsHoy.filter((m) => m.restauranteId).reduce((s, m) => s + (-m.delta), 0);
 
+  /* Los últimos 30 días, fijos y sin escoger fechas. Este mismo dato vive en
+     Reportes, pero allá hay que pedirlo; acá se ve al abrir, que es lo que
+     hace que se mire. Treinta días porque el pedido es mensual: lo que más
+     salió el mes pasado es lo que hay que asegurarse de no quedarse sin. */
+  const movsMes = await movimientosPeriodo(sumarDias(hoy, -30), hoy);
+  const masSalen = porProducto(movsMes).slice(0, 5);
+  const entraronMes = entradasPorProducto(movsMes);
+
   const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
   const enEstado = (clave) => productos.filter((p) => estadoStock(p).clave === clave).sort(porNombre);
 
@@ -300,7 +309,29 @@ async function vistaResumen() {
             el('td', {}, [etiquetaEstado(p.estado)]),
           ]))))
       : seccion('Inventario', 'Todo está en nivel. No hay nada que ordenar hoy.'),
+
+    masSalen.length
+      ? seccion('Lo que más sale', 'Últimos 30 días. Es lo que no se puede acabar.',
+        tabla(['Producto', { t: 'Botellas', num: true }, { t: 'Valor', num: true }, { t: 'Entró', num: true }],
+          masSalen.map((p) => {
+            const ent = entraronMes.find((e) => e.clave === p.clave);
+            return el('tr', {}, [
+              el('td', { texto: nombreDeProducto(productos, p.clave) }),
+              el('td', { clase: 'num', texto: numero(p.unidades) }),
+              el('td', { clase: 'num', texto: dinero(p.valor) }),
+              /* Al lado de lo que salió va lo que entró del mismo producto en
+                 los mismos días. Salieron 40 y entraron 12 es la conversación
+                 que hay que tener con el proveedor, y separadas en dos
+                 pantallas esa resta no la hace nadie. */
+              el('td', { clase: 'num', texto: ent ? numero(ent.unidades) : '—' }),
+            ]);
+          })))
+      : null,
   ].filter(Boolean));
+}
+
+function nombreDeProducto(productos, id) {
+  return productos.find((p) => p.id === id)?.nombre || 'Producto retirado';
 }
 
 /* ------------------------------------------------------------------ */
@@ -665,6 +696,13 @@ function exportarCompra(lista) {
 
 async function vistaConteo() {
   const productos = await productosActivos();
+  /* Lo que entró hoy, para tenerlo delante mientras se cuenta. La escena es
+     ésta: la tara dice 12, el sistema dice 8, y alguien se va a pasar media
+     hora buscando un descuadre que no existe — entraron 4 esta mañana y el
+     conteo se hizo antes de registrarlos. Con la columna a la vista, eso se
+     resuelve mirando. */
+  const entradasHoy = entradasPorProducto(await movimientosPeriodo(hoyOperativo, hoyOperativo));
+  const entroHoy = new Map(entradasHoy.map((e) => [e.clave, e.unidades]));
   const contados = new Map();
   const motivo = el('input', { type: 'text', maxlength: String(LARGO.motivo), placeholder: 'Conteo semanal, rotura, merma…' });
   const resumen = el('p', { clase: 'desc', texto: 'Ningún producto tiene diferencia todavía.' });
@@ -695,10 +733,17 @@ async function vistaConteo() {
     const celdaDif = el('td', { clase: 'num', texto: '—', estilo: { color: 'var(--texto-3)' } });
     return el('tr', {}, [
       el('td', { texto: p.nombre }),
+      entroHoy.size
+        ? el('td', {
+          clase: 'num',
+          texto: entroHoy.has(p.id) ? `+${entroHoy.get(p.id)}` : '—',
+          estilo: { color: entroHoy.has(p.id) ? 'var(--ok)' : 'var(--texto-3)' },
+        })
+        : null,
       el('td', { clase: 'num', texto: String(p.existencia) }),
       el('td', { clase: 'num' }, [entrada]),
       celdaDif,
-    ]);
+    ].filter(Boolean));
   });
 
   return el('div', {}, [
@@ -706,7 +751,11 @@ async function vistaConteo() {
       'Escribe lo que hay de verdad en la tara. Solo se registran los productos donde escribas algo distinto a lo que dice el sistema. Los demás no se tocan.',
       resumen,
       campo('Motivo del ajuste', motivo, 'Obligatorio. Queda en el historial junto a cada diferencia.'),
-      tabla(['Producto', { t: 'Según el sistema', num: true }, { t: 'Contado', num: true }, { t: 'Diferencia', num: true }], filas),
+      tabla([
+        'Producto',
+        ...(entroHoy.size ? [{ t: 'Entró hoy', num: true }] : []),
+        { t: 'Según el sistema', num: true }, { t: 'Contado', num: true }, { t: 'Diferencia', num: true },
+      ], filas),
       el('div', { estilo: { marginTop: '18px' } }, [
         el('button', {
           clase: 'btn btn-primario',
@@ -1027,6 +1076,7 @@ async function vistaReportes() {
   const rest = porRestaurante(movs);
   const emp = porEmpleado(movs);
   const prod = porProducto(movs);
+  const entradas = entradasPorProducto(movs);
   const totalUnidades = rest.reduce((s, r) => s + r.unidades, 0);
   const totalValor = rest.reduce((s, r) => s + r.valor, 0);
 
@@ -1108,13 +1158,31 @@ async function vistaReportes() {
           ]);
         }))) : null,
 
-    prod.length ? seccion('Por producto', null,
+    prod.length ? seccion('Por producto', 'Lo que más salió del almacén en el período.',
       tabla(['Producto', { t: 'Botellas', num: true }, { t: 'Valor', num: true }],
         prod.slice(0, 25).map((p) => el('tr', {}, [
           el('td', { texto: nombreProd(p.clave) }),
           el('td', { clase: 'num', texto: numero(p.unidades) }),
           el('td', { clase: 'num', texto: dinero(p.valor) }),
         ])))) : null,
+
+    /* Lo que entró es la otra mitad de la historia y faltaba: sin ella no se
+       puede contestar «¿qué y cuánto le pedimos al proveedor este mes?», que
+       es la pregunta con la que se negocia el próximo pedido. */
+    entradas.length
+      ? seccion('Lo que entró al almacén',
+        `${entradas.reduce((s, e) => s + e.unidades, 0)} botellas recibidas en el período, `
+        + `${dinero(entradas.reduce((s, e) => s + e.valor, 0))} en total.`,
+        tabla(['Producto', { t: 'Botellas', num: true }, { t: 'Costo', num: true },
+          { t: 'Órdenes', num: true }, 'Última'],
+        entradas.slice(0, 25).map((e) => el('tr', {}, [
+          el('td', { texto: nombreProd(e.clave) }),
+          el('td', { clase: 'num', texto: numero(e.unidades) }),
+          el('td', { clase: 'num', texto: dinero(e.valor) }),
+          el('td', { clase: 'num', texto: String(e.veces) }),
+          el('td', { texto: e.ultima ? fechaHoraPR(e.ultima) : '—' }),
+        ]))))
+      : seccion('Lo que entró al almacén', 'No se recibió mercancía en este período.'),
   ].filter(Boolean));
 }
 

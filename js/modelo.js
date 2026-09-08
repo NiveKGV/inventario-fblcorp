@@ -341,6 +341,32 @@ function agregar(movs, claveFn) {
     .sort((a, b) => b.unidades - a.unidades);
 }
 
+/* Lo que entró al almacén, por producto.
+
+   No puede usar `agregar`: esa función se salta todo movimiento sin
+   restaurante, porque mide consumo y una entrada no la consume nadie. Por eso
+   hasta ahora las entradas no aparecían en ningún reporte — solo en el
+   historial, una fila por orden— y no había forma de contestar «¿qué y cuánto
+   pedimos este mes?» sin ir leyendo a mano.
+
+   Solo cuenta `entrada`. Una devolución también sube la existencia, pero es
+   licor que ya se había comprado y vuelve de un local: sumarla aquí inflaría
+   lo que se le pidió al proveedor. */
+function entradasPorProducto(movs) {
+  const mapa = new Map();
+  for (const m of movs) {
+    if (m.tipo !== 'entrada' || m.delta <= 0) continue;
+    const acc = mapa.get(m.productoId)
+      || { clave: m.productoId, unidades: 0, valor: 0, veces: 0, ultima: null };
+    acc.unidades += m.delta;
+    acc.valor += m.delta * (m.costoUnitario || 0);
+    acc.veces += 1;
+    if (!acc.ultima || m.fechaISO > acc.ultima) acc.ultima = m.fechaISO;
+    mapa.set(m.productoId, acc);
+  }
+  return [...mapa.values()].sort((a, b) => b.unidades - a.unidades);
+}
+
 const porRestaurante = (movs) => agregar(movs, (m) => m.restauranteId);
 const porEmpleado = (movs) => agregar(movs, (m) => m.empleadoId);
 const porProducto = (movs) => agregar(movs, (m) => m.productoId);
@@ -391,6 +417,6 @@ export {
   fechaPR, horaPR, fechaHoraPR, diaOperativo, diaOperativoActual, sumarDias,
   estadoStock, localesDe, registrarLote, revertirLote,
   productosActivos, listaCompra, movimientosPeriodo,
-  porRestaurante, porEmpleado, porProducto,
+  porRestaurante, porEmpleado, porProducto, entradasPorProducto,
   consumoSemanal, resumenAlertas,
 };
