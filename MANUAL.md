@@ -216,7 +216,7 @@ teclado salta sola al próximo producto, sin tener que tocar la pantalla. Si
 estás filtrando con el buscador, salta solo entre los que se ven.
 
 **Si ese día entró mercancía**, aparece una columna **«Entró hoy»** con lo que
-llegó de cada producto. Está para evitar el susto de siempre: la tara dice 12,
+llegó de cada producto. Está para evitar el susto de siempre: se cuentan 12,
 el sistema dice 8, y alguien se pasa media hora buscando un descuadre que no
 existe porque entraron 4 esa mañana.
 

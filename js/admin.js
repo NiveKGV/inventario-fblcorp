@@ -697,7 +697,7 @@ function exportarCompra(lista) {
 async function vistaConteo() {
   const productos = await productosActivos();
   /* Lo que entró hoy, para tenerlo delante mientras se cuenta. La escena es
-     ésta: la tara dice 12, el sistema dice 8, y alguien se va a pasar media
+     ésta: se cuentan 12, el sistema dice 8, y alguien se va a pasar media
      hora buscando un descuadre que no existe — entraron 4 esta mañana y el
      conteo se hizo antes de registrarlos. Con la columna a la vista, eso se
      resuelve mirando. */
@@ -748,7 +748,7 @@ async function vistaConteo() {
 
   return el('div', {}, [
     seccion('Conteo físico',
-      'Escribe lo que hay de verdad en la tara. Solo se registran los productos donde escribas algo distinto a lo que dice el sistema. Los demás no se tocan.',
+      'Escribe lo que de verdad hay. Solo se registran los productos donde escribas algo distinto a lo que dice el sistema. Los demás no se tocan.',
       resumen,
       campo('Motivo del ajuste', motivo, 'Obligatorio. Queda en el historial junto a cada diferencia.'),
       tabla([
