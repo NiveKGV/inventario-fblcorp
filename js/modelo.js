@@ -80,9 +80,23 @@ const ESTADOS = {
   critico: { clave: 'critico', etiqueta: 'Hay que ordenar', orden: 1 },
   bajo: { clave: 'bajo', etiqueta: 'Bajo el máximo', orden: 2 },
   ok: { clave: 'ok', etiqueta: 'En nivel', orden: 3 },
+  sinTope: { clave: 'sin-tope', etiqueta: 'Sin tope', orden: 4 },
 };
 
+/* Un producto sin máximo y sin mínimo no se repone por nivel: son los licores
+   raros, los de un evento, los que se piden cuando alguien los pide. Decir de
+   ellos «Agotado» es ruido — que no haya no es una anomalía, es lo normal.
+
+   Importa más de lo que parece el día de la instalación: el catálogo entra con
+   existencia en cero porque el conteo viene después, y sin esto los cientos de
+   productos recién cargados salen todos en rojo como si el almacén estuviera
+   vacío. */
+function sinTope(p) {
+  return !(p.par > 0) && !(p.puntoReorden > 0);
+}
+
 function estadoStock(p) {
+  if (sinTope(p)) return ESTADOS.sinTope;
   if (p.existencia <= 0) return ESTADOS.agotado;
   if (p.existencia <= p.puntoReorden) return ESTADOS.critico;
   if (p.existencia < p.par) return ESTADOS.bajo;
@@ -324,18 +338,22 @@ async function consumoSemanal(dias = 28) {
 
 async function resumenAlertas() {
   const productos = await productosActivos();
-  let agotados = 0; let criticos = 0; let bajos = 0;
+  let agotados = 0; let criticos = 0; let bajos = 0; let sinTopes = 0;
   for (const p of productos) {
     const e = estadoStock(p);
     if (e === ESTADOS.agotado) agotados += 1;
     else if (e === ESTADOS.critico) criticos += 1;
     else if (e === ESTADOS.bajo) bajos += 1;
+    else if (e === ESTADOS.sinTope) sinTopes += 1;
   }
   return {
     total: productos.length,
     agotados,
     criticos,
     bajos,
+    // No es una alerta: es la lista de lo que falta por configurar. Sirve para
+    // sentarse con el gerente y ponerle niveles a lo que sí los necesita.
+    sinTopes,
     porOrdenar: agotados + criticos + bajos,
     valorInventario: productos.reduce((s, p) => s + p.existencia * (p.costo || 0), 0),
   };

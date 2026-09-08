@@ -467,6 +467,20 @@ igual(M.estadoStock({ existencia: 6, par: 10, puntoReorden: 5 }).clave, 'bajo', 
 igual(M.estadoStock({ existencia: 10, par: 10, puntoReorden: 5 }).clave, 'ok', 'Justo en el par ya está en nivel');
 igual(M.estadoStock({ existencia: 14, par: 10, puntoReorden: 5 }).clave, 'ok', 'Sobre el par está en nivel');
 
+/* Sin tope: los licores que se piden solo cuando alguien los pide. No se
+   reponen por nivel, así que no pueden generar alertas — ni siquiera en cero,
+   que es como entra el catálogo el día de la instalación. */
+igual(M.estadoStock({ existencia: 0, par: 0, puntoReorden: 0 }).clave, 'sin-tope',
+  'Sin máximo ni mínimo, el cero NO es agotado');
+igual(M.estadoStock({ existencia: 4, par: 0, puntoReorden: 0 }).clave, 'sin-tope',
+  'Sin máximo ni mínimo, con existencia sigue sin tope');
+igual(M.estadoStock({ existencia: 0, par: undefined, puntoReorden: undefined }).clave, 'sin-tope',
+  'Los niveles ausentes cuentan igual que en cero');
+igual(M.estadoStock({ existencia: 0, par: 6, puntoReorden: 0 }).clave, 'agotado',
+  'Con máximo pero sin mínimo, el cero sí es agotado');
+igual(M.estadoStock({ existencia: 0, par: 0, puntoReorden: 2 }).clave, 'agotado',
+  'Con mínimo pero sin máximo, el cero sí es agotado');
+
 const compra = await M.listaCompra();
 const enCompra = compra.find((p) => p.nombre === 'Contado');
 igual(enCompra.aOrdenar, 3, 'La cantidad a ordenar es el par menos lo que queda (10 - 7)');

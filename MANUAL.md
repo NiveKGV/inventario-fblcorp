@@ -96,6 +96,22 @@ porque si dos lo compartieran le cargaría las botellas a la persona equivocada.
 | Rojo | Llegó al **mínimo**. Hay que ordenar ya |
 | Gris | Agotado |
 
+### Los licores que no se reponen por nivel
+
+Hay licores que no se piden de forma regular: los raros, los de un evento, los
+que se compran cuando alguien los pide. A esos **se les deja el máximo y el
+mínimo vacíos**, y el sistema los trata distinto:
+
+- **No entran en la lista de compra** ni avisan cuando se acaban. Que no haya
+  ninguna no es un problema que resolver, es lo normal en ellos.
+- En Administración aparecen con la etiqueta **«Sin tope»**, en gris.
+- **En el panel del empleado sí se ven en gris cuando no queda ninguna.** Eso no
+  es una alerta: es para que quien está frente al estante no toque una botella
+  que no está.
+
+En el Resumen hay una tarjeta, **«sin tope definido»**, que los lista. Sirve para
+sentarse con calma y ponerle niveles a los que sí los necesiten.
+
 ---
 
 ## 5. Cargar el catálogo desde Excel
@@ -139,6 +155,10 @@ Para uno o dos no hace falta archivo: **Inventario → Agregar producto**. Si el
 licor es de una categoría que todavía no existe, en el menú de categorías se
 escoge **la opción de escribir una nueva** y se pone el nombre ahí mismo, sin
 salir de la pantalla.
+
+El **máximo** y el **mínimo** vienen con un número puesto para que el producto
+entre listo para trabajar. Si el licor no se repone por nivel, **borra los dos y
+déjalos vacíos**: queda «sin tope» y no vuelve a avisar (punto 4).
 
 ---
 

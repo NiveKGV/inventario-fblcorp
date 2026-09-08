@@ -408,6 +408,9 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .estado-bajo { --estado: var(--bajo); }
 .estado-critico { --estado: var(--critico); }
 .estado-agotado { --estado: var(--agotado); }
+/* Sin tope no es una alerta: es un producto que no se repone por nivel. Va con
+   el mismo tratamiento que «En nivel» para que no llame la atención. */
+.estado-sin-tope { --estado: var(--ok); }
 
 /* --- Carrito --- */
 
@@ -602,6 +605,7 @@ tbody tr:active { background: var(--panel); }
 .etiqueta.agotado { background: color-mix(in srgb, var(--agotado) 22%, transparent); color: var(--texto-2); }
 /* Contorno en vez de relleno: acompaña a la etiqueta del tipo sin competir con
    ella. Dice de dónde salió el movimiento, no qué movimiento es. */
+.etiqueta.sin-tope { background: transparent; border: 1px solid var(--borde); color: var(--texto-2); }
 .etiqueta.origen-admin { background: transparent; border: 1px solid var(--borde); color: var(--texto-2); margin-left: 6px; }
 
 .aviso-banda {

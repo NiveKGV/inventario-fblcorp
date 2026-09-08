@@ -17,7 +17,7 @@ import {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
 } from './datos.js';
 import {
-  estadoStock, registrarLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
+  ESTADOS, estadoStock, registrarLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
@@ -494,10 +494,18 @@ function pintarProductos() {
   }
   rejilla.replaceChildren(...lista.map((p) => {
     const e = estadoStock(p);
+    /* Acá el panel se aparta de la vista de gerencia a propósito.
+
+       Un producto sin máximo ni mínimo no genera alertas —no se repone por
+       nivel—, pero al empleado que está parado frente al estante sí le sirve
+       ver que no queda ninguna: eso no es una alerta de reposición, es un
+       hecho. Sin esto, un licor en cero se vería igual que uno con existencia,
+       y el empleado lo tocaría para encontrarse con que no hay. */
+    const clave = p.existencia <= 0 ? ESTADOS.agotado.clave : e.clave;
     const enCarrito = estado.carrito.get(p.id);
     return el('div', { clase: 'envoltura-tecla' }, [
       el('button', {
-        clase: `tecla-producto estado-${e.clave}`,
+        clase: `tecla-producto estado-${clave}`,
         onclick: () => abrirSelectorCantidad(p),
       }, [
         el('span', {}, [

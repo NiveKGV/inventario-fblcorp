@@ -271,6 +271,12 @@ async function vistaResumen() {
         'Bajo el máximo', 'Todavía alcanzan, pero están por debajo de lo que debería haber.',
         enEstado('bajo'), { conOrden: true },
       )),
+      alertas.sinTopes ? dato(numero(alertas.sinTopes), 'sin tope definido', '', () => modalProductos(
+        'Sin tope definido',
+        'No tienen máximo ni mínimo, así que no entran en la lista de compra ni avisan cuando se acaban. '
+        + 'Es correcto para los licores que se piden solo cuando alguien los pide; para los demás, hay que ponerles niveles.',
+        enEstado('sin-tope'),
+      )) : null,
       dato(numero(salidasHoy), 'botellas salieron hoy', '', () => modalSalidasHoy(movsHoy)),
       dato(dinero(alertas.valorInventario), 'valor del inventario', '', () => modalProductos(
         'Valor del inventario', `${dinero(alertas.valorInventario)} a costo, de mayor a menor.`,
@@ -394,7 +400,7 @@ async function modalProducto(producto) {
       el('div', { clase: 'fila-campos' }, [campo('Categoría', categoria), campo('Tamaño', tamano)]),
       campoNueva,
       el('div', { clase: 'fila-campos-3' }, [
-        campo('Máximo', par, 'Cuánto debe haber cuando el almacén está completo'),
+        campo('Máximo', par, 'Cuánto debe haber cuando el almacén está completo. Déjalo vacío si este licor no se repone por nivel'),
         campo('Mínimo', reorden, 'Al llegar aquí se pone en rojo: hay que pedir'),
         campo('Costo por unidad', costo, 'USD, opcional'),
       ]),
@@ -425,8 +431,14 @@ async function modalProducto(producto) {
         clase: 'btn-primario',
         accion: async () => {
           const n = nombre.value.trim();
-          const vPar = parseInt(par.value, 10);
-          const vReorden = parseInt(reorden.value, 10);
+          /* Vacío vale cero, y cero significa «sin tope»: un licor que no se
+             repone por nivel. Antes `parseInt('')` daba NaN y el guardado se
+             frenaba con un mensaje sobre enteros, sin decir que lo que hacía
+             falta era escribir un cero. Al cargar un catálogo cuyos niveles se
+             deciden después —con el gerente, delante del estante— eso es
+             fricción en cada producto. */
+          const vPar = par.value.trim() === '' ? 0 : parseInt(par.value, 10);
+          const vReorden = reorden.value.trim() === '' ? 0 : parseInt(reorden.value, 10);
           const vExistencia = parseInt(existencia.value, 10);
           if (n.length < 2) { err.textContent = 'Escribe el nombre del producto.'; return; }
           if (n.length > LARGO.nombre) {
