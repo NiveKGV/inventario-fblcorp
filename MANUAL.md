@@ -68,6 +68,26 @@ Silver aunque no se escriba la tilde; escribiendo "don julio" aparecen los dos;
 escribiendo "ron" aparece la categoría completa y escribiendo "caja", las
 cervezas. Para volver a las categorías, se toca **Limpiar** o cualquier categoría.
 
+### Quien trabaja en más de una barra
+
+Hay gente que cubre dos locales. A esa persona **se le marcan sus dos barras**
+cuando se le crea la cuenta (Administración → Empleados), y al entrar su código
+el sistema le pregunta **a cuál de las suyas** le carga lo que se lleva. Solo
+salen las suyas, nunca las cuatro.
+
+Al que trabaja en un solo local **no se le pregunta nada**: su código lo lleva
+directo, como siempre. Esa es la garantía del sistema y no se toca por
+comodidad de unos pocos.
+
+En el Historial, esas salidas llevan la etiqueta **«Barra escogida»**. No es
+una sospecha —es cómo funciona para quien cubre dos—, pero quien cuadre los
+números tiene derecho a saber que ahí alguien decidió, en vez de haberlo
+determinado el código.
+
+**No le crees dos cuentas a la misma persona.** Serían dos códigos que
+recordar, y en los reportes aparecería partida en dos: nadie podría ver cuánto
+sacó Luis, solo cuánto sacaron sus dos mitades.
+
 ### Los códigos los maneja la gerencia
 
 **El empleado no puede cambiar su propio código.** Los asigna y los cambia un

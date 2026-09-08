@@ -11,7 +11,7 @@ import {
 } from './cripto.js';
 import { productosIniciales, empleadosEjemplo, alinearCategorias } from './datos.js';
 import {
-  estadoStock, registrarLote, revertirLote, productosActivos, listaCompra,
+  estadoStock, localesDe, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, consumoSemanal,
   resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, TIPOS,
 } from './modelo.js';
@@ -1164,6 +1164,7 @@ async function vistaHistorial() {
         motivo: m.motivo,
         autorizadoPor: m.autorizadoPor,
         origen: m.origen,
+        localElegido: m.localElegido,
         lineas: [],
       };
       lotes.set(m.loteId, g);
@@ -1257,6 +1258,13 @@ function filaLote(g, nombreRest) {
       g.tipo === 'salida' && g.origen === 'admin'
         ? el('span', { clase: 'etiqueta origen-admin', texto: 'Desde gerencia' })
         : null,
+      /* La persona trabaja en más de una barra y escogió a cuál cargarle esta
+         salida. No es sospechoso —es cómo funciona para quien cubre dos—, pero
+         quien cuadre los números tiene derecho a saber que aquí alguien
+         decidió, en vez de haberlo determinado el código. */
+      g.tipo === 'salida' && g.origen !== 'admin' && g.localElegido
+        ? el('span', { clase: 'etiqueta local-elegido', texto: 'Barra escogida' })
+        : null,
     ].filter(Boolean)),
     el('td', { texto: g.empleadoNombre }),
     el('td', { texto: g.restauranteId ? nombreRest(g.restauranteId) : '—' }),
@@ -1315,11 +1323,14 @@ async function vistaEmpleados() {
   const gerentes = activos.filter((e) => e.rol === 'gerente');
 
   const bloques = restaurantes.sort((a, b) => a.orden - b.orden).map((r) => {
-    const suyos = activos.filter((e) => e.restauranteId === r.id && e.rol === 'empleado')
+    /* Quien cubre dos barras sale en las dos secciones, con la nota de dónde
+       más trabaja. Aparecer una sola vez obligaría al gerente a recordar en
+       qué lista buscarlo. */
+    const suyos = activos.filter((e) => e.rol === 'empleado' && localesDe(e).includes(r.id))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     return seccion(r.nombre, `${suyos.length} ${suyos.length === 1 ? 'empleado' : 'empleados'}`,
       el('div', { clase: 'lista-simple' }, suyos.length
-        ? suyos.map((e) => filaEmpleado(e, r))
+        ? suyos.map((e) => filaEmpleado(e, r, (id) => restaurantes.find((x) => x.id === id)?.nombre))
         : [el('p', { clase: 'vacio', texto: 'Sin empleados registrados.' })]),
       el('button', {
         clase: 'btn btn-chico btn-fantasma',
@@ -1349,7 +1360,10 @@ async function vistaEmpleados() {
   ].filter(Boolean));
 }
 
-function filaEmpleado(e, restaurante) {
+function filaEmpleado(e, restaurante, nombresLocales = null) {
+  const otros = restaurante && nombresLocales
+    ? localesDe(e).filter((id) => id !== restaurante.id).map((id) => nombresLocales(id)).filter(Boolean)
+    : [];
   return el('div', { clase: 'item-lista' }, [
     el('div', { clase: 'crece' }, [
       el('div', { clase: 't', texto: e.nombre }),
@@ -1357,6 +1371,7 @@ function filaEmpleado(e, restaurante) {
         clase: 's',
         texto: [
           e.rol === 'gerente' ? 'Gerencia' : (restaurante ? restaurante.nombre : ''),
+          otros.length ? `también en ${otros.join(' y ')}` : '',
           e.codigo ? 'código asignado' : 'SIN CÓDIGO: no puede entrar',
           e.ejemplo ? 'de ejemplo' : '',
         ].filter(Boolean).join(' · '),
@@ -1374,9 +1389,19 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
   const nombre = el('input', {
     type: 'text', value: empleado?.nombre || '', autocapitalize: 'words', maxlength: String(LARGO.empleado),
   });
-  const selRest = el('select', {}, restaurantes.sort((a, b) => a.orden - b.orden).map((r) => el('option', {
-    value: r.id, texto: r.nombre, selected: r.id === (empleado?.restauranteId || restauranteId),
-  })));
+  /* Casillas y no un menú: hay gente que cubre dos barras, y con un menú de
+     una sola opción la única salida era crearle dos cuentas. Dos cuentas son
+     dos códigos que recordar y, peor, la misma persona partida en dos en los
+     reportes: nadie puede ver cuánto sacó Luis, solo cuánto sacaron sus dos
+     mitades. */
+  const yaTiene = new Set(localesDe(empleado));
+  if (!empleado && restauranteId) yaTiene.add(restauranteId);
+  const casillas = restaurantes.sort((a, b) => a.orden - b.orden).map((r) => {
+    const caja = el('input', { type: 'checkbox', value: r.id, checked: yaTiene.has(r.id) });
+    return { r, caja, fila: el('label', { clase: 'casilla-local' }, [caja, el('span', { texto: r.nombre })]) };
+  });
+  const campoLocales = el('div', { clase: 'casillas-locales' }, casillas.map((c) => c.fila));
+  const localesMarcados = () => casillas.filter((c) => c.caja.checked).map((c) => c.r.id);
   const codigo = el('input', {
     type: 'text', inputmode: 'numeric', maxlength: String(LARGO_CODIGO),
     autocomplete: 'off', placeholder: '0'.repeat(LARGO_CODIGO),
@@ -1392,7 +1417,11 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
       : 'Deja el código en blanco para no cambiarlo.',
     contenido: el('div', {}, [
       campo('Nombre completo', nombre),
-      rol === 'empleado' ? campo('Restaurante', selRest) : null,
+      rol === 'empleado'
+        ? campo('Restaurantes', campoLocales,
+          'Marca todos donde trabaja. Con uno solo, su código lo lleva directo a ese local. '
+          + 'Con dos o más, al entrar escoge a cuál le carga la salida.')
+        : null,
       campo(esNuevo ? `Código de ${LARGO_CODIGO} dígitos` : `Código nuevo de ${LARGO_CODIGO} dígitos`, codigo,
         esNuevo
           ? 'Se muestra a la vista para que lo anotes bien. No puede repetirse con el de otra persona.'
@@ -1425,6 +1454,10 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
           const n = nombre.value.trim();
           const c = codigo.value.trim();
           if (n.length < 3) { err.textContent = 'Escribe el nombre completo.'; return; }
+          if (rol === 'empleado' && !localesMarcados().length) {
+            err.textContent = 'Marca al menos un restaurante: sin local, sus salidas no se le pueden cargar a nadie.';
+            return;
+          }
           if (esNuevo && !c) { err.textContent = 'Sin código la persona no puede entrar al sistema.'; return; }
           if (c && !new RegExp(`^\\d{${LARGO_CODIGO}}$`).test(c)) {
             err.textContent = `El código debe tener exactamente ${LARGO_CODIGO} dígitos.`; return;
@@ -1456,10 +1489,17 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
             codigo: null,
             creado: new Date().toISOString(),
           };
+          const locales = rol === 'gerente' ? [] : localesMarcados();
           await DB.guardar('empleados', {
             ...base,
             nombre: n,
-            restauranteId: rol === 'gerente' ? null : selRest.value,
+            restaurantes: locales,
+            /* Se sigue escribiendo el campo viejo con el primero de la lista.
+               No es para que lo lea esta app —acá manda `localesDe`—, sino
+               para que un respaldo hecho hoy se pueda abrir en una instalación
+               que todavía no tenga este cambio. Un respaldo que solo sirve con
+               la versión que lo generó no es un respaldo. */
+            restauranteId: locales[0] || null,
             codigo: hash,
           });
           await ctx.refrescarCache();

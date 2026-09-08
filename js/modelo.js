@@ -103,6 +103,25 @@ function estadoStock(p) {
   return ESTADOS.ok;
 }
 
+/* --- Locales de una persona --- */
+
+/* Hay empleados que trabajan en más de una barra. El campo viejo
+   `restauranteId` guardaba uno solo; el nuevo `restaurantes` guarda la lista.
+
+   Esta función lee los dos, y por eso no hace falta migrar la base ni el
+   respaldo de nadie: un empleado grabado antes de este cambio sigue teniendo
+   su `restauranteId` y aquí sale como una lista de uno. Los que se graben de
+   ahora en adelante traen la lista. Mientras exista un solo lugar que
+   responda «¿en qué barras trabaja esta persona?», las dos formas conviven
+   sin que el resto del código se entere. */
+function localesDe(empleado) {
+  if (!empleado) return [];
+  if (Array.isArray(empleado.restaurantes) && empleado.restaurantes.length) {
+    return empleado.restaurantes;
+  }
+  return empleado.restauranteId ? [empleado.restauranteId] : [];
+}
+
 /* --- Registro de movimientos --- */
 
 function validarLineas(lineas) {
@@ -124,7 +143,7 @@ function validarLineas(lineas) {
 async function registrarLote({
   tipo, lineas, empleadoId, empleadoNombre, restauranteId = null,
   motivo = '', permitirNegativo = false, autorizadoPor = null,
-  origen = 'empleado',
+  origen = 'empleado', localElegido = false,
 }) {
   const def = TIPOS[tipo];
   if (!def) throw new Error(`Tipo de movimiento desconocido: ${tipo}`);
@@ -196,6 +215,14 @@ async function registrarLote({
         // idénticas en el historial, y el argumento entero del sistema es
         // poder distinguirlas.
         origen,
+        /* Cierto cuando la persona trabaja en más de una barra y tuvo que
+           escoger a cuál cargarle esta salida. Es la misma pregunta que
+           responde `origen`, un escalón más abajo: con un solo local, el
+           código lo determina y nadie decide nada; con dos, alguien decidió.
+           Se guarda en el movimiento y no se deduce del empleado, porque las
+           barras de una persona cambian con el tiempo y el historial tiene que
+           seguir contando lo que pasó ese día. */
+        localElegido: def.requiereRestaurante ? !!localElegido : false,
         negativoPermitido: despues < 0,
         fechaISO,
         diaOperativo: dia,
@@ -362,7 +389,7 @@ async function resumenAlertas() {
 export {
   ZONA, TIPOS, ESTADOS,
   fechaPR, horaPR, fechaHoraPR, diaOperativo, diaOperativoActual, sumarDias,
-  estadoStock, registrarLote, revertirLote,
+  estadoStock, localesDe, registrarLote, revertirLote,
   productosActivos, listaCompra, movimientosPeriodo,
   porRestaurante, porEmpleado, porProducto,
   consumoSemanal, resumenAlertas,

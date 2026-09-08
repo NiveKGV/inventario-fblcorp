@@ -607,6 +607,34 @@ tbody tr:active { background: var(--panel); }
    ella. Dice de dónde salió el movimiento, no qué movimiento es. */
 .etiqueta.sin-tope { background: transparent; border: 1px solid var(--borde); color: var(--texto-2); }
 .etiqueta.origen-admin { background: transparent; border: 1px solid var(--borde); color: var(--texto-2); margin-left: 6px; }
+.etiqueta.local-elegido { background: transparent; border: 1px dashed var(--borde); color: var(--texto-2); margin-left: 6px; }
+
+/* --- Locales de un empleado --- */
+
+.casillas-locales { display: grid; gap: 8px; }
+.casilla-local {
+  display: flex; align-items: center; gap: 12px;
+  /* 48 px de alto: esto se marca con el dedo, no con un ratón. */
+  min-height: 48px; padding: 0 14px;
+  background: var(--panel-2); border: 1px solid var(--borde); border-radius: var(--r);
+  cursor: pointer; font-size: 16px;
+}
+.casilla-local input { width: 22px; height: 22px; accent-color: var(--acento); flex: none; }
+.casilla-local:has(input:checked) { border-color: var(--acento); }
+
+/* Escoger barra al entrar. Botones grandes y con el color del local, porque
+   esto se toca de pie, con prisa y a veces con las manos ocupadas. */
+.locales-escoger { display: grid; gap: 12px; }
+.btn-local {
+  display: flex; align-items: center; gap: 14px;
+  min-height: 64px; font-size: 19px; font-weight: 700;
+  justify-content: flex-start; text-align: left;
+  background: var(--panel-2); border: 2px solid var(--local, var(--borde)); color: var(--texto);
+}
+.punto-local {
+  width: 14px; height: 14px; border-radius: 7px; flex: none;
+  background: var(--local, var(--acento));
+}
 
 .aviso-banda {
   display: flex; align-items: center; gap: 14px;

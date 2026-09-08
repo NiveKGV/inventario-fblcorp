@@ -159,6 +159,28 @@ igual(movs[0].restauranteId, REST, 'La salida queda cargada al restaurante');
 igual(movs[0].empleadoNombre, 'Luis Ortiz', 'La salida queda a nombre del empleado');
 igual([movs[0].existenciaAntes, movs[0].existenciaDespues], [10, 7],
   'Guarda la existencia antes y después, para poder auditar sin recalcular');
+igual(movs[0].localElegido, false,
+  'Con una sola barra el local lo determina el código: no queda marcado como escogido');
+
+const dosBarras = await producto('Ron de dos barras', 10);
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: dosBarras.id, cantidad: 2 }], ...EMP,
+  restauranteId: REST, localElegido: true,
+});
+const movsDos = await DB.porIndice('movimientos', 'porProducto', dosBarras.id);
+igual(movsDos[0].localElegido, true,
+  'Cuando la persona escogió barra, el movimiento lo guarda');
+
+/* Una entrada al almacén no pertenece a ningún local, así que la marca no
+   tiene sentido ahí y no debe colarse. */
+const entrada = await producto('Ron de entrada', 0);
+await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: entrada.id, cantidad: 5 }], ...EMP,
+  localElegido: true,
+});
+const movsEnt = await DB.porIndice('movimientos', 'porProducto', entrada.id);
+igual(movsEnt[0].localElegido, false,
+  'Un movimiento sin restaurante nunca queda marcado como barra escogida');
 
 await lanza(
   () => M.registrarLote({ tipo: 'salida', lineas: [{ productoId: jack.id, cantidad: 99 }], ...EMP, restauranteId: REST }),
@@ -480,6 +502,19 @@ igual(M.estadoStock({ existencia: 0, par: 6, puntoReorden: 0 }).clave, 'agotado'
   'Con máximo pero sin mínimo, el cero sí es agotado');
 igual(M.estadoStock({ existencia: 0, par: 0, puntoReorden: 2 }).clave, 'agotado',
   'Con mínimo pero sin máximo, el cero sí es agotado');
+
+/* --- Locales de un empleado --- */
+
+igual(M.localesDe({ restauranteId: 'la-o' }).join(), 'la-o',
+  'Un empleado viejo, con un solo restauranteId, sale como lista de uno');
+igual(M.localesDe({ restaurantes: ['la-o', 'la-madre'] }).join(), 'la-o,la-madre',
+  'Un empleado nuevo devuelve toda su lista');
+igual(M.localesDe({ restaurantes: ['la-o'], restauranteId: 'la-grieta' }).join(), 'la-o',
+  'Con las dos formas presentes manda la lista nueva, no el campo viejo');
+igual(M.localesDe({ restaurantes: [], restauranteId: 'la-o' }).join(), 'la-o',
+  'Una lista vacía cae al campo viejo en vez de dejar a la persona sin local');
+igual(M.localesDe({}).length, 0, 'Sin ningún local, la lista viene vacía');
+igual(M.localesDe(null).length, 0, 'Sin empleado tampoco revienta');
 
 const compra = await M.listaCompra();
 const enCompra = compra.find((p) => p.nombre === 'Contado');

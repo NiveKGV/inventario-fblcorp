@@ -17,7 +17,8 @@ import {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
 } from './datos.js';
 import {
-  ESTADOS, estadoStock, registrarLote, productosActivos, resumenAlertas, fechaHoraPR, horaPR,
+  ESTADOS, estadoStock, localesDe, registrarLote, productosActivos, resumenAlertas,
+  fechaHoraPR, horaPR,
 } from './modelo.js';
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
@@ -202,6 +203,7 @@ async function mostrarAcceso() {
   detenerSesion();
   estado.empleado = null;
   estado.restaurante = null;
+  estado.localElegido = false;
   estado.carrito.clear();
   estado.busqueda = '';
   await cargarCache();
@@ -347,12 +349,54 @@ async function intentarAcceso(codigo) {
     return;
   }
 
-  const restaurante = estado.restaurantes.find((r) => r.id === encontrado.restauranteId);
-  if (!restaurante) {
+  /* Solo los locales activos: si a alguien le quitaron una barra, su código no
+     debe seguir ofreciéndola. */
+  const suyos = localesDe(encontrado)
+    .map((id) => estado.restaurantes.find((r) => r.id === id))
+    .filter(Boolean);
+
+  if (!suyos.length) {
     errorAcceso('Tu restaurante ya no está activo. Habla con el gerente.');
     return;
   }
-  await abrirPanel(encontrado, restaurante);
+
+  /* Con una sola barra no se le pregunta nada: el código la determina, que es
+     lo que el sistema promete. Preguntarle a todos por comodidad de los pocos
+     que cubren dos rompería justamente esa garantía — cualquiera podría
+     cargarle una botella a otro local. */
+  if (suyos.length === 1) {
+    await abrirPanel(encontrado, suyos[0]);
+    return;
+  }
+
+  const escogido = await pedirLocal(encontrado, suyos);
+  if (!escogido) { mostrarAcceso(); return; }
+  await abrirPanel(encontrado, escogido, { elegido: true });
+}
+
+/* Pantalla de barra para quien trabaja en más de una. Se le ofrecen solo las
+   suyas —nunca las cuatro—, en botones grandes con el color de cada local,
+   porque esto se toca de pie y con prisa. */
+function pedirLocal(empleado, locales) {
+  return new Promise((resolve) => {
+    let resuelto = false;
+    const responder = (v) => { if (!resuelto) { resuelto = true; resolve(v); } };
+
+    abrirModal({
+      titulo: `Hola, ${empleado.nombre.split(' ')[0]}`,
+      subtitulo: '¿A qué barra le cargamos lo que te lleves?',
+      contenido: el('div', { clase: 'locales-escoger' }, locales.map((r) => el('button', {
+        clase: 'btn btn-local',
+        type: 'button',
+        estilo: { '--local': r.color },
+        onclick: () => { responder(r); cerrarModal(); },
+      }, [
+        el('span', { clase: 'punto-local' }),
+        el('span', { texto: r.nombre }),
+      ]))),
+      botones: [{ texto: 'Cancelar', accion: () => { responder(null); cerrarModal(); } }],
+    });
+  });
 }
 
 /* Pide un código de gerencia dentro de un modal, para autorizar una excepción
@@ -399,9 +443,10 @@ function autorizarGerente(motivo) {
 /* Panel de salida                                                     */
 /* ------------------------------------------------------------------ */
 
-async function abrirPanel(empleado, restaurante) {
+async function abrirPanel(empleado, restaurante, { elegido = false } = {}) {
   estado.empleado = empleado;
   estado.restaurante = restaurante;
+  estado.localElegido = elegido;
   estado.carrito.clear();
   estado.busqueda = '';
   await cargarCache();
@@ -687,6 +732,7 @@ async function confirmarSalida() {
       empleadoId: estado.empleado.id,
       empleadoNombre: estado.empleado.nombre,
       restauranteId: estado.restaurante.id,
+      localElegido: estado.localElegido,
       permitirNegativo: Boolean(autorizadoPor),
       autorizadoPor,
     });
