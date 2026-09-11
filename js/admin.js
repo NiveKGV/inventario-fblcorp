@@ -9,7 +9,9 @@ import {
   derivarCodigo, igualesConstante, codigoDebil, LARGO_CODIGO,
   cifrarRespaldo, descifrarRespaldo, esRespaldoCifrado,
 } from './cripto.js';
-import { productosIniciales, empleadosEjemplo, alinearCategorias } from './datos.js';
+import {
+  productosIniciales, empleadosEjemplo, alinearCategorias, alinearRestaurantes,
+} from './datos.js';
 import {
   estadoStock, localesDe, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, entradasPorProducto,
@@ -1925,6 +1927,8 @@ async function vistaSistema() {
                reabriera la app —y nada indicaba que hiciera falta reiniciar—.
                Es el caso normal al montar un iPad de reemplazo. */
             await alinearCategorias();
+            // Igual con los locales: un respaldo de antes de Prepa lo borraría del iPad.
+            await alinearRestaurantes();
             /* Queda anotado quién restauró y cuántos movimientos había antes y
                después. Sin esto, una restauración es indistinguible de que no
                hubiera pasado nada, y es la operación con más poder del sistema. */

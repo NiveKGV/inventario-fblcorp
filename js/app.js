@@ -15,6 +15,7 @@ import {
 } from './cripto.js';
 import {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
+  alinearRestaurantes,
 } from './datos.js';
 import {
   ESTADOS, estadoStock, localesDe, registrarLote, productosActivos, resumenAlertas,
@@ -74,6 +75,12 @@ async function iniciar() {
       await alinearCategorias();
     } catch (e) {
       console.warn('No se pudieron alinear las categorías:', e);
+    }
+    // Mismo criterio: si añadir un local falla, la app abre igual con los que tenga.
+    try {
+      await alinearRestaurantes();
+    } catch (e) {
+      console.warn('No se pudieron alinear los restaurantes:', e);
     }
     await cargarCache();
     mostrarAcceso();

@@ -318,6 +318,11 @@ problema ese archivo no devuelve el inventario.
 
 - Cuántas botellas se llevó **cada restaurante** y cuánto valen a costo. Esto
   sirve para repartir el costo del licor entre los cuatro locales.
+- **Prepa** aparece como un local más. No es un restaurante, pero la cocina de
+  preparación saca licor para jarabes, infusiones y tragos en lote, y ese
+  consumo tiene que tener nombre: si no, se reparte sin rastro entre los cuatro
+  o se esconde en un ajuste del conteo. Se le asignan empleados, se le hacen
+  salidas manuales y devoluciones igual que a cualquier restaurante.
 - Cuánto sacó **cada empleado**.
 - Cuáles fueron **los productos** que más salieron.
 - **Lo que entró al almacén**: qué se recibió, cuántas botellas, cuánto costó,

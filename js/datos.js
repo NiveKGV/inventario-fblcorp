@@ -11,6 +11,11 @@ const RESTAURANTES = [
   { id: 'la-o', nombre: 'La O', color: '#3fa9a0', orden: 2, activo: true },
   { id: 'la-grieta', nombre: 'La Grieta', color: '#d2543f', orden: 3, activo: true },
   { id: 'el-mas-alla', nombre: 'El Más Allá', color: '#8a72d6', orden: 4, activo: true },
+  /* No es un restaurante, pero consume licor igual que uno: la cocina de
+     preparación saca botellas para jarabes, infusiones y tragos en lote. Va
+     como un local más para que ese consumo tenga nombre en los reportes, en vez
+     de repartirse sin rastro entre los cuatro o esconderse en un ajuste. */
+  { id: 'prepa', nombre: 'Prepa', color: '#6f8fb0', orden: 5, activo: true },
 ];
 
 const CATEGORIAS = [
@@ -254,6 +259,25 @@ async function reubicarMezcales() {
   return mal.length;
 }
 
+/* Añade los locales del código que falten en un iPad ya instalado.
+
+   Los restaurantes solo se siembran en la configuración inicial. Sin esto, un
+   local nuevo —Prepa— existiría en las instalaciones futuras pero nunca en el
+   iPad del almacén, que ya está configurado y con el conteo hecho, y la única
+   forma de conseguirlo sería reinstalar y perder el inventario.
+
+   Solo añade. No borra, no renombra y no toca `activo`: si la gerencia desactiva
+   un local, esa decisión se respeta en cada apertura. Los movimientos y los
+   empleados apuntan a los locales por id, así que añadir uno no mueve nada de
+   lo que ya está registrado. */
+async function alinearRestaurantes() {
+  const enAparato = new Set((await DB.todos('restaurantes')).map((r) => r.id));
+  const faltan = RESTAURANTES.filter((r) => !enAparato.has(r.id));
+  if (faltan.length) await DB.guardarVarios('restaurantes', faltan.map((r) => ({ ...r })));
+  return faltan.length;
+}
+
 export {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
+  alinearRestaurantes,
 };

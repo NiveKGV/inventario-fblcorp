@@ -782,6 +782,24 @@ igual([deCarga[0].tipo, deCarga[0].delta, deCarga[0].existenciaAntes], ['ajuste'
   'La existencia inicial entra como ajuste desde cero, con rastro en el historial');
 igual(deCarga[0].restauranteId, null, 'La carga inicial no se le carga a ningún restaurante');
 
+/* --- Locales nuevos en un iPad ya instalado --- */
+
+const Datos = await import('./js/datos.js');
+await Datos.alinearRestaurantes();
+// Se imita el iPad del almacén, configurado antes de que existiera Prepa.
+await DB.borrar('restaurantes', 'prepa');
+const movsAntesLocal = (await DB.todos('movimientos')).length;
+igual(await Datos.alinearRestaurantes(), 1, 'Un iPad instalado sin Prepa lo recibe al abrir');
+igual((await DB.obtener('restaurantes', 'prepa'))?.nombre, 'Prepa', 'Prepa queda guardado con su nombre');
+igual((await DB.todos('movimientos')).length, movsAntesLocal,
+  'Añadir un local no toca el historial');
+igual(await Datos.alinearRestaurantes(), 0, 'Abrir otra vez no lo duplica');
+const prepaApagado = await DB.obtener('restaurantes', 'prepa');
+await DB.guardar('restaurantes', { ...prepaApagado, activo: false });
+await Datos.alinearRestaurantes();
+igual((await DB.obtener('restaurantes', 'prepa')).activo, false,
+  'Si la gerencia lo desactiva, al abrir no se vuelve a encender');
+
 /* ------------------------------------------------------------------ */
 
 const total = document.getElementById('total');
