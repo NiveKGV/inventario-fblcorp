@@ -312,6 +312,26 @@ la consulta salía vacía y la prueba reventaba en `[0].unidades`. Corregido a
 `diaOperativo(new Date(), 5)`. Cualquier prueba que consulte movimientos por
 fecha tiene que usar el día operativo, nunca la fecha del calendario.
 
+### Prepa es destino de todos, no barra de nadie
+
+La cocina de preparación consume licor igual que una barra, pero nadie
+«pertenece» a ella: baja el que va a hacer el jarabe ese día. Por eso, además de
+ser un restaurante más en gerencia, aparece en el **panel del empleado** como
+segundo destino para todo el personal (`DESTINO_COMUN` y `pintarDestinos` en
+`app.js`), en el pie del carrito.
+
+Lo que sostiene esto sin romper la garantía del código:
+
+- El destino **arranca siempre** en la barra que determinó el código. No hay
+  pantalla que preguntar, ni estado en blanco.
+- Lo único que se ofrece de más es Prepa. Un empleado sigue sin poder cargarle
+  botellas a otra barra — por eso la lista es `sus locales + prepa` y no los
+  restaurantes activos.
+- Cambiar el destino marca `localElegido: true`, que el Historial muestra como
+  «Barra escogida». Es el mismo mecanismo de quien cubre dos locales.
+- El selector **no se dibuja cuando hay una sola opción**: una instalación sin
+  Prepa no ve nada nuevo.
+
 ### Salida manual desde gerencia
 Hasta ahora las botellas solo salían por el panel del empleado, y un gerente no
 puede entrar ahí: su código lo manda directo a Administración. Si el propio

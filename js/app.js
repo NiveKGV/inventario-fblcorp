@@ -409,6 +409,53 @@ function pedirLocal(empleado, locales) {
   });
 }
 
+/* Prepa no es la barra de nadie: es la cocina de preparación, y a ella baja
+   licor cualquiera —el bartender que va a hacer un jarabe, el que prepara los
+   tragos en lote—. Por eso aparece como destino para todo el personal y no solo
+   para quien la tenga marcada.
+
+   Lo que NO se toca es la garantía de siempre: el destino arranca en la barra
+   que determinó el código, nunca en blanco y nunca preguntando. Cambiarlo es un
+   acto visible, con el nombre y el color del destino en toda la pantalla, y
+   queda marcado en el historial como «Barra escogida». Un empleado sigue sin
+   poder cargarle botellas a otra barra: lo único que se le ofrece además de la
+   suya es Prepa, que no le carga el costo a ningún restaurante ajeno.
+
+   Si una instalación no tiene Prepa, el selector no se dibuja: con un solo
+   destino no hay nada que escoger. */
+const DESTINO_COMUN = 'prepa';
+
+function pintarDestinos(suyos, inicial, elegidoInicial) {
+  const caja = $('#destino');
+  const chips = $('#destino-chips');
+
+  const opciones = [...suyos];
+  const comun = estado.restaurantes.find((r) => r.id === DESTINO_COMUN);
+  if (comun && !opciones.some((r) => r.id === comun.id)) opciones.push(comun);
+
+  caja.hidden = opciones.length < 2;
+  if (caja.hidden) return;
+
+  const pintar = () => {
+    chips.replaceChildren(...opciones.map((r) => el('button', {
+      clase: `chip-destino${r.id === estado.restaurante.id ? ' sel' : ''}`,
+      type: 'button',
+      estilo: { '--c': r.color },
+      texto: r.nombre,
+      onclick: () => {
+        if (r.id === estado.restaurante.id) return;
+        estado.restaurante = r;
+        estado.localElegido = elegidoInicial || r.id !== inicial.id;
+        document.documentElement.style.setProperty('--acento', r.color);
+        $('#panel-titulo').textContent = r.nombre;
+        $('#panel-punto').style.background = r.color;
+        pintar();
+      },
+    })));
+  };
+  pintar();
+}
+
 /* Pide un código de gerencia dentro de un modal, para autorizar una excepción
    sin que el empleado abandone lo que estaba haciendo. */
 function autorizarGerente(motivo) {
@@ -471,6 +518,13 @@ async function abrirPanel(empleado, restaurante, { elegido = false } = {}) {
   $('#btn-salir').onclick = () => mostrarAcceso();
   $('#btn-confirmar').onclick = confirmarSalida;
   $('#btn-vaciar').onclick = () => { estado.carrito.clear(); pintarCarrito(); pintarProductos(); };
+
+  /* Se recalculan aquí y no se reciben por parámetro: `cargarCache()` acaba de
+     refrescar los restaurantes, así que esta es la lista buena. */
+  const suyos = localesDe(empleado)
+    .map((id) => estado.restaurantes.find((r) => r.id === id))
+    .filter(Boolean);
+  pintarDestinos(suyos.length ? suyos : [restaurante], restaurante, elegido);
 
   const buscador = $('#buscador');
   buscador.value = '';

@@ -91,6 +91,26 @@ determinado el código.
 recordar, y en los reportes aparecería partida en dos: nadie podría ver cuánto
 sacó Luis, solo cuánto sacaron sus dos mitades.
 
+### Prepa: el destino que ve todo el personal
+
+Prepa no es la barra de nadie: es la cocina de preparación, y a ella baja licor
+cualquiera — el que va a hacer un jarabe, el que prepara los tragos en lote. Por
+eso **Prepa le aparece a todo el personal**, tenga la barra que tenga.
+
+En el panel, arriba del botón de confirmar, sale **«Esto es para»** con dos
+opciones: su barra (marcada de entrada) y **Prepa**. Si toca Prepa, la pantalla
+completa cambia de color y de título, para que no haya duda de a dónde va eso.
+
+Lo que no cambia es la garantía de siempre: **el destino arranca siempre en la
+barra que determinó su código**, nunca en blanco y sin preguntarle nada. Un
+empleado de La Madre sigue sin poder cargarle botellas a La O. Lo único que se
+le ofrece además de la suya es Prepa, que no le carga el costo a ningún
+restaurante.
+
+Esas salidas quedan en el Historial con la etiqueta **«Barra escogida»**, igual
+que las de quien cubre dos locales: quien cuadre los números tiene derecho a
+saber que ahí alguien decidió el destino.
+
 ### Los códigos los maneja la gerencia
 
 **El empleado no puede cambiar su propio código.** Los asigna y los cambia un
