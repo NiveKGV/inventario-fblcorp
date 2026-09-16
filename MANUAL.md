@@ -91,25 +91,22 @@ determinado el código.
 recordar, y en los reportes aparecería partida en dos: nadie podría ver cuánto
 sacó Luis, solo cuánto sacaron sus dos mitades.
 
-### Prepa: el destino que ve todo el personal
+### Prepa
 
-Prepa no es la barra de nadie: es la cocina de preparación, y a ella baja licor
-cualquiera — el que va a hacer un jarabe, el que prepara los tragos en lote. Por
-eso **Prepa le aparece a todo el personal**, tenga la barra que tenga.
+Prepa es la cocina de preparación: saca botellas para jarabes, infusiones y
+tragos en lote. En el sistema **funciona igual que un restaurante**, ni más ni
+menos — aparece en Salida manual, en Devoluciones, en los reportes de consumo y
+en la lista de barras al crear un empleado.
 
-En el panel, arriba del botón de confirmar, sale **«Esto es para»** con dos
-opciones: su barra (marcada de entrada) y **Prepa**. Si toca Prepa, la pantalla
-completa cambia de color y de título, para que no haya duda de a dónde va eso.
+Para que alguien pueda cargarle licor a Prepa desde el panel, **se le marca
+Prepa** en Administración → Empleados, junto a su barra. Desde ahí funciona
+exactamente como cualquiera que cubra dos locales: al entrar su código el
+sistema le pregunta a cuál de las suyas le carga lo que se lleva.
 
-Lo que no cambia es la garantía de siempre: **el destino arranca siempre en la
-barra que determinó su código**, nunca en blanco y sin preguntarle nada. Un
-empleado de La Madre sigue sin poder cargarle botellas a La O. Lo único que se
-le ofrece además de la suya es Prepa, que no le carga el costo a ningún
-restaurante.
-
-Esas salidas quedan en el Historial con la etiqueta **«Barra escogida»**, igual
-que las de quien cubre dos locales: quien cuadre los números tiene derecho a
-saber que ahí alguien decidió el destino.
+Si quieres que todo el personal pueda mandar botellas a Prepa, márcale Prepa a
+todos. Si solo la usan dos o tres personas, márcasela a esas y a nadie más: al
+que no la tenga marcada, su código lo sigue llevando directo a su barra sin
+preguntarle nada.
 
 ### Los códigos los maneja la gerencia
 

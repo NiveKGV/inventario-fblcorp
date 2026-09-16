@@ -801,9 +801,9 @@ igual((await DB.obtener('restaurantes', 'prepa')).activo, false,
   'Si la gerencia lo desactiva, al abrir no se vuelve a encender');
 await DB.guardar('restaurantes', { ...prepaApagado, activo: true });
 
-/* Prepa como destino de cualquiera. El empleado pertenece a una barra y su
-   código la determina; Prepa es lo único que se le ofrece además de la suya,
-   y cuando la escoge el costo tiene que irse a Prepa y no a su barra. */
+/* Prepa funciona como cualquier otro local: a quien la tenga marcada junto a su
+   barra, el sistema le pregunta al entrar, y si la escoge el costo tiene que
+   irse a Prepa y no a la otra. */
 const paraPrepa = await producto('Ron de jarabe', 10);
 await M.registrarLote({
   tipo: 'salida', lineas: [{ productoId: paraPrepa.id, cantidad: 4 }], ...EMP,
@@ -811,7 +811,7 @@ await M.registrarLote({
 });
 const movPrepa = (await DB.porIndice('movimientos', 'porProducto', paraPrepa.id))[0];
 igual(movPrepa.restauranteId, 'prepa',
-  'Un empleado de otra barra puede cargarle la salida a Prepa');
+  'Quien tenga Prepa marcada puede cargarle la salida a Prepa');
 igual(movPrepa.localElegido, true,
   'Esa salida queda marcada como escogida: el código no la determinó');
 igual(movPrepa.origen || 'empleado', 'empleado',
