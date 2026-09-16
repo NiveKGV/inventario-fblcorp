@@ -240,11 +240,13 @@ Detalles que sostienen esta publicación y no hay que romper:
   tomara el color del local, en La Grieta saldría rojo y se leería como borrar.
 - **Día operativo desde las 5:00 a.m.** Un bar cierra a las 2. Con día calendario,
   un turno se parte en dos fechas y los reportes no cuadran con la realidad.
-- **Cierre de sesión a los 180 segundos** (`INACTIVIDAD_EMPLEADO`), 300 para la
-  gerencia. Sin cierre automático el registro de auditoría no vale nada: las
-  botellas del siguiente quedarían a nombre del anterior. Arrancó en 60 y se
-  subió a 3 minutos: con un minuto, buscar seis licores en el almacén cerraba la
-  sesión a media compra.
+- **Cierre de sesión a los 180 segundos, parejo para todos** (`INACTIVIDAD_EMPLEADO`
+  e `INACTIVIDAD_GERENTE`). Sin cierre automático el registro de auditoría no
+  vale nada: las botellas del siguiente quedarían a nombre del anterior. Arrancó
+  en 60 y se subió a 3 minutos: con un minuto, buscar seis licores en el almacén
+  cerraba la sesión a media compra. La gerencia tuvo 300 por captura de datos y
+  bajó a 180 a pedido del cliente — el reloj se reinicia con cualquier evento de
+  entrada, así que escribir nunca cierra la sesión.
 - **Nombre de base parametrizable** (`globalThis.__ALMACEN_DB_PRUEBAS__`): existe
   solo para que `pruebas.html` no toque el inventario real. La página verifica el
   nombre y se niega a correr si apunta a la base de producción.
@@ -319,8 +321,10 @@ botella desaparecía del almacén sin aparecer en el consumo de nadie, y el
 reparto de costos entre los cuatro locales quedaba corto.
 
 Administración → **Salida manual** cierra ese hueco: escoge restaurante,
-motivo (obligatorio) y productos, y registra un `salida` normal a nombre del
-gerente con la sesión abierta.
+productos y, si quiere, un motivo, y registra un `salida` normal a nombre del
+gerente con la sesión abierta. El motivo nació obligatorio y dejó de serlo a
+pedido del cliente (septiembre 2026): el gerente no tiene que justificar por qué
+baja licor. En blanco se guarda «Salida desde gerencia», nunca una celda vacía.
 
 **Campo `origen` en cada movimiento** (`'empleado'` por defecto, `'admin'` en la
 salida manual y en toda reversión). Existe porque acá el gerente **escoge** el
@@ -383,8 +387,13 @@ cifrados. Con la sal compartida, un solo recorrido de las 100.000
 combinaciones de 5 dígitos los rompe todos a la vez: medido, 22,4 ms por
 derivación, 37 minutos para el espacio entero. El aviso ahora manda guardarlo
 en el iCloud del negocio y advierte de no mandarlo por correo ni WhatsApp.
-**Cifrar el respaldo con una frase sigue pendiente** y es una decisión con
-costo: si se pierde la frase, el respaldo no se recupera.
+**El cifrado del respaldo se implementó y se retiró** (septiembre 2026). Existía
+un modal que ofrecía cifrar con una frase; el cliente pidió quitarlo porque el
+respaldo se usa el día del desastre y ese día una frase perdida es un respaldo
+perdido — aquí no hay servidor que la restablezca. El respaldo sale legible y su
+custodia es lo único que lo protege, dicho así en el manual. `descifrarRespaldo`
+y `esRespaldoCifrado` se quedan: los archivos cifrados de antes tienen que
+seguir abriéndose al restaurar.
 
 **Límite aceptado, sin arreglo posible sin servidor:** el bloqueo por intentos
 fallidos vive en el IndexedDB del propio aparato. Se puede reescribir con el

@@ -58,8 +58,11 @@ se llevó y a qué hora.
 corrige un gerente desde el Historial con el botón **Revertir**. Por eso la
 pantalla de confirmación muestra la lista completa: es el momento de mirarla.
 
-**La sesión se cierra sola a los tres minutos de no tocar nada.** Es a propósito:
-así nadie saca botellas a nombre de otro.
+**La sesión se cierra sola a los tres minutos de no tocar nada.** Aplica igual a
+los empleados y a la gerencia. Es a propósito: así nadie saca botellas a nombre
+de otro ni se queda el área de administración abierta sobre la mesa. El reloj se
+reinicia con cualquier toque, así que escribir no cierra nada — solo dejar el
+iPad solo.
 
 ### El buscador
 
@@ -236,7 +239,8 @@ te queda corto ese mes.
 Usa **Administración → Salida manual**:
 
 1. Escoge el restaurante que se lleva el licor.
-2. Escribe el motivo. Es obligatorio.
+2. Si quieres, escribe un motivo. Es opcional: si lo dejas en blanco, el
+   historial guarda «Salida desde gerencia».
 3. Busca los productos y pon las cantidades.
 4. Revisa la lista en la confirmación y toca **Sí, registrar**.
 
@@ -281,16 +285,15 @@ app, se va el inventario y el historial completo. No hay copia en ninguna nube.
 **Asigna una persona y un día fijo de la semana:**
 
 1. **Administración → Sistema → Respaldar ahora.**
-2. El sistema pregunta si quieren **cifrar el archivo**. Digan que sí y escriban
-   la frase (el punto 13 explica esto en detalle).
-3. El iPad pregunta dónde guardarlo. Escoge **Guardar en Archivos → iCloud
+2. El iPad pregunta dónde guardarlo. Escoge **Guardar en Archivos → iCloud
    Drive**, o pásalo a una computadora.
-4. Listo. Toma menos de un minuto.
+3. Listo. Toma menos de un minuto. No pregunta nada más.
 
 > **El respaldo no se manda por correo.** Ese archivo lleva los nombres de todo
-> el personal, el historial completo y los códigos de todos. Un correo pasa por
-> demasiadas manos y se queda guardado para siempre en dos buzones. Si tiene que
-> salir del iPad, que sea a una carpeta que ustedes controlen — y cifrado.
+> el personal, el historial completo y los códigos de todos, y se abre con
+> cualquier programa. Un correo pasa por demasiadas manos y se queda guardado
+> para siempre en dos buzones. Si tiene que salir del iPad, que sea a una
+> carpeta que ustedes controlen.
 
 Cuando pasan más de 7 días sin respaldo, aparece un aviso en Administración que
 no se quita hasta que lo hagas. Está puesto a propósito.
@@ -373,45 +376,28 @@ cuáles son esos productos, sin tener que irse a otra pestaña.
 
 ---
 
-## 13. El respaldo cifrado, en detalle
+## 13. El archivo del respaldo, en detalle
 
-Al tocar **Respaldar ahora** el sistema pregunta si quieren cifrar el archivo.
+**Respaldar ahora** genera el archivo y el iPad pregunta dónde guardarlo. No
+pide frases ni contraseñas: un toque y está.
 
-**Cifrado (recomendado).** Se escribe una frase, se repite, y el archivo queda
-inservible para quien no la sepa. El archivo lleva los nombres del personal, el
-historial completo y los códigos de todos: cifrarlo es lo que evita que sirva
-de algo si termina en el correo de alguien o en una cuenta ajena.
+**El archivo se abre con cualquier programa.** Adentro van los nombres del
+personal, el historial completo y los códigos —esos sí guardados de forma que no
+se leen—. Como el archivo no está cerrado con llave, **lo único que lo protege
+es dónde lo guarden**:
 
-**Sin cifrar.** El archivo se abre con cualquier programa. Solo tiene sentido si
-va a un sitio que ustedes controlan y no sale de ahí.
-
-### Lo que hay que entender antes de escoger
-
-**Si pierden la frase, el respaldo no se recupera. Nunca.** Aquí no hay servidor
-que la guarde ni forma de restablecerla, y no existe nadie —tampoco quien
-programó esto— que pueda abrir ese archivo sin ella.
-
-Por eso:
-
-- La frase se escribe **dos veces**. Un dedazo no se nota hasta el día que hace
-  falta el respaldo, que es el peor día para descubrirlo.
-- Se puede guardar una **pista**, que viaja sin cifrar dentro del archivo y
-  aparece cuando se va a restaurar. La pista no debe ser la frase.
-- **Anoten la frase donde se anotan las cosas del negocio**, no solo en la
-  cabeza de una persona. Si esa persona no está el día del problema, el respaldo
-  tampoco.
-- Usen **la misma frase siempre**. Una frase distinta cada semana es una lista
-  de frases que recordar, y ahí es donde se pierden.
-
-Al generar un respaldo cifrado, el sistema lo abre él mismo para comprobarlo
-antes de entregárselo. Si algo hubiera salido mal, se enteran en ese momento y
-no el día del desastre.
+- Al iCloud Drive del negocio o a una computadora de la oficina, sí.
+- Por correo o por WhatsApp, no. Un mensaje pasa por demasiadas manos y se queda
+  guardado para siempre en dos buzones.
+- Si se lo pasan a alguien de afuera (el contable, un técnico), que sea por una
+  carpeta que ustedes controlen y que la puedan cerrar después.
 
 ### Restaurar
 
-Se escoge el archivo igual que siempre. Si está cifrado, el sistema pide la
-frase y muestra la pista si el archivo trae una. Con la frase equivocada no pasa
-nada: avisa y el iPad se queda como estaba.
+Se escoge el archivo en **Sistema → Restaurar un respaldo** y el sistema
+reemplaza el contenido del iPad por el del archivo.
 
-Los respaldos hechos antes de que existiera el cifrado se siguen abriendo sin
+Si el archivo es uno de los viejos que se guardaron cifrados con una frase, el
+sistema la pide y muestra la pista si la trae. Con la frase equivocada no pasa
+nada: avisa y el iPad se queda como estaba. Los respaldos nuevos se abren sin
 pedir nada.

@@ -7,7 +7,7 @@
 import { DB, nuevoId } from './db.js';
 import {
   derivarCodigo, igualesConstante, codigoDebil, LARGO_CODIGO,
-  cifrarRespaldo, descifrarRespaldo, esRespaldoCifrado,
+  descifrarRespaldo, esRespaldoCifrado,
 } from './cripto.js';
 import {
   productosIniciales, empleadosEjemplo, alinearCategorias, alinearRestaurantes,
@@ -890,9 +890,12 @@ async function vistaDevolucion() {
    puerta para mover inventario a mano y que se lea igual que el registro
    honesto. De ahí `origen: 'admin'` y la etiqueta en el historial.
 
-   Por qué el motivo es obligatorio aunque el modelo no lo exija para las
-   salidas: la salida de un empleado se explica sola (bajó al almacén en su
-   turno). Esta no. */
+   El motivo era obligatorio y ahora no lo es, por decisión del dueño del
+   producto: el gerente no tiene que justificarle a nadie por qué baja licor.
+   El campo se queda porque a veces sí conviene anotarlo, y cuando se deja en
+   blanco el historial guarda «Salida desde gerencia» — que es lo que pasó — en
+   vez de una celda vacía. Lo que prueba el registro no cambia: quién la hizo,
+   hacia qué restaurante, qué salió y a qué hora. */
 async function vistaSalidaManual() {
   const [productos, restaurantes] = await Promise.all([productosActivos(), DB.todos('restaurantes')]);
   const cantidades = new Map();
@@ -935,7 +938,6 @@ async function vistaSalidaManual() {
   pintar();
 
   const registrar = async () => {
-    if (!motivo.value.trim()) { brindis({ texto: 'Falta el motivo', tipo: 'error' }); return; }
     const lineas = [...cantidades.entries()].map(([productoId, cantidad]) => ({ productoId, cantidad }));
     if (!lineas.length) { brindis({ texto: 'No hay cantidades', tipo: 'error' }); return; }
 
@@ -973,7 +975,7 @@ async function vistaSalidaManual() {
         empleadoId: ctx.gerente.id,
         empleadoNombre: ctx.gerente.nombre,
         restauranteId: restaurante.value,
-        motivo: motivo.value.trim(),
+        motivo: motivo.value.trim() || 'Salida desde gerencia',
         origen: 'admin',
       });
       await ctx.refrescarCache();
@@ -992,7 +994,7 @@ async function vistaSalidaManual() {
       + 'gerencia, para que se distinga de las que registra el personal con su código.',
       el('div', { clase: 'fila-campos' }, [
         campo('Restaurante que se lo lleva', restaurante),
-        campo('Motivo', motivo, 'Obligatorio. Queda en el historial junto a la salida.'),
+        campo('Motivo', motivo, 'Opcional. Si lo escribes, queda en el historial junto a la salida.'),
       ]),
       campo('Buscar', buscador),
       contenedor,
@@ -1591,70 +1593,6 @@ async function modalEmpleado(empleado, restauranteId = null, rolFijo = null) {
 /* Sistema y respaldos                                                 */
 /* ------------------------------------------------------------------ */
 
-/* Pide la frase y devuelve el texto ya listo para guardar, cifrado o no.
-
-   Cifrar es lo correcto —el archivo lleva los nombres del personal, el
-   historial y los códigos de todos— pero tiene un filo que no se puede esconder:
-   aquí no hay servidor, así que no existe «olvidé mi frase». Una frase perdida
-   es un respaldo perdido, y el respaldo es justo lo que se usa el día que el
-   iPad se cayó al piso.
-
-   Por eso se pide dos veces (un dedazo silencioso sería tan malo como
-   olvidarla), se guarda una pista sin cifrar dentro del archivo, y se deja
-   salir sin cifrar a la vista y sin esconder el botón: obligar a cifrar a
-   quien no puede custodiar una frase solo consigue frases como «1234». */
-function pedirFraseDeRespaldo() {
-  const frase = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Mínimo 8 caracteres' });
-  const repetir = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Escríbela otra vez' });
-  const pista = el('input', { type: 'text', maxlength: '60', placeholder: 'El nombre de la primera barra, el año que abrimos…' });
-  const err = el('p', { clase: 'mensaje-error' });
-
-  return new Promise((resolver) => {
-    let decidido = false;
-    const responder = (v) => { if (!decidido) { decidido = true; resolver(v); } };
-
-    abrirModal({
-      titulo: 'Respaldo del sistema',
-      subtitulo: 'El archivo lleva los nombres del personal, el historial completo y los códigos de todos. '
-        + 'Cifrarlo hace que no sirva de nada en manos ajenas.',
-      contenido: el('div', {}, [
-        el('div', { clase: 'aviso-banda rojo' }, [
-          el('div', { clase: 'crece' }, [
-            el('b', { texto: 'Si pierden la frase, el respaldo no se recupera' }),
-            el('span', {
-              texto: 'No hay servidor que la guarde ni forma de restablecerla. Anótenla donde se anotan '
-                + 'las cosas del negocio, no solo en la cabeza de una persona.',
-            }),
-          ]),
-        ]),
-        campo('Frase para cifrar', frase),
-        campo('Repite la frase', repetir, 'Se pide dos veces porque un dedazo aquí no se nota hasta el día que haga falta el respaldo.'),
-        campo('Pista (opcional)', pista, 'Se guarda sin cifrar dentro del archivo, para el día que nadie recuerde la frase. No escribas la frase aquí.'),
-        err,
-      ]),
-      botones: [
-        { texto: 'Cancelar', accion: () => { responder(null); cerrarModal(); } },
-        {
-          texto: 'Guardar sin cifrar',
-          accion: () => { responder({ cifrar: false }); cerrarModal(); },
-        },
-        {
-          texto: 'Cifrar y guardar',
-          clase: 'btn-primario',
-          accion: () => {
-            const f = frase.value;
-            if (f.length < 8) { err.textContent = 'La frase debe tener al menos 8 caracteres.'; return; }
-            if (f !== repetir.value) { err.textContent = 'Las dos frases no son iguales.'; return; }
-            responder({ cifrar: true, frase: f, pista: pista.value.trim() });
-            cerrarModal();
-          },
-        },
-      ],
-      alCerrar: () => responder(null),
-    });
-  });
-}
-
 /* Pide la frase para abrir un respaldo cifrado. La pista viaja sin cifrar
    dentro del archivo justo para este momento: se muestra si la trae. */
 function pedirFraseParaAbrir(pista) {
@@ -1683,40 +1621,34 @@ function pedirFraseParaAbrir(pista) {
   });
 }
 
-async function exportarRespaldo() {
-  const eleccion = await pedirFraseDeRespaldo();
-  if (!eleccion) return;
+/* El respaldo sale directo, sin preguntar nada.
 
+   Antes se abría un modal que ofrecía cifrarlo con una frase. Se quitó por
+   decisión del dueño del producto: el respaldo es lo que salva el día que el
+   iPad se rompe, y ese día nadie quiere descubrir que la frase se perdió. Aquí
+   no hay servidor, así que no existe «olvidé mi frase» — una frase perdida es
+   un respaldo perdido.
+
+   Lo que se pierde con esto hay que decirlo y está dicho en el manual: el
+   archivo sale legible, con los nombres del personal, el historial completo y
+   los códigos cifrados de todos. Su custodia es ahora lo único que lo protege,
+   y por eso el aviso de dónde guardarlo se queda.
+
+   Restaurar un respaldo cifrado de antes sigue funcionando: esa parte no se
+   tocó. */
+async function exportarRespaldo() {
   try {
     const paquete = await DB.exportarTodo();
-    let texto = JSON.stringify(paquete, null, 2);
-    let nombre = `respaldo-almacen-${fechaPR()}.json`;
+    const texto = JSON.stringify(paquete, null, 2);
 
-    if (eleccion.cifrar) {
-      const sobre = await cifrarRespaldo(texto, eleccion.frase, eleccion.pista);
-      /* Se abre lo que se acaba de cerrar, antes de entregarlo. Si algo hubiera
-         salido mal, el fallo aparecería el día del desastre y con el iPad ya
-         roto: el único momento en que se puede comprobar es ahora, mientras
-         quien escribió la frase sigue delante de la pantalla. */
-      const comprobado = await descifrarRespaldo(sobre, eleccion.frase);
-      if (comprobado !== texto) throw new Error('La comprobación del cifrado falló. No se generó el archivo.');
-      texto = JSON.stringify(sobre, null, 2);
-      nombre = `respaldo-almacen-${fechaPR()}-cifrado.json`;
-      // La pista también queda en el iPad: si el archivo se pierde de vista,
-      // al menos se puede recordar con qué frase se cifró el último.
-      await DB.escribirConfig('ultima_pista_respaldo', eleccion.pista || '');
-    }
-
-    await descargar(nombre, texto);
+    await descargar(`respaldo-almacen-${fechaPR()}.json`, texto);
     await DB.escribirConfig('ultimo_respaldo', new Date().toISOString());
-    await DB.escribirConfig('ultimo_respaldo_cifrado', !!eleccion.cifrar);
+    await DB.escribirConfig('ultimo_respaldo_cifrado', false);
 
     brindis({
-      texto: eleccion.cifrar ? 'Respaldo cifrado y comprobado' : 'Respaldo generado',
-      sub: eleccion.cifrar
-        ? 'Se abrió para verificarlo antes de entregarlo. Sin la frase no se puede restaurar: anótenla.'
-        : 'Guárdalo en el iCloud Drive del negocio. No lo mandes por correo ni por WhatsApp: '
-          + 'el archivo lleva los datos del personal y sus códigos.',
+      texto: 'Respaldo generado',
+      sub: 'Guárdalo en el iCloud Drive del negocio. No lo mandes por correo ni por WhatsApp: '
+        + 'el archivo lleva los datos del personal y sus códigos.',
       tipo: 'exito',
       segundos: 10,
     });

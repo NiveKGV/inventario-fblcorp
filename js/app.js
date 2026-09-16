@@ -31,8 +31,11 @@ import { abrirAdmin, salirAdmin } from './admin.js';
    botellas con las manos ocupadas. El cierre automático sigue existiendo por
    la misma razón de siempre: que nadie saque licor a nombre de otro porque
    el anterior dejó la sesión abierta. */
+/* Tres minutos parejo para todos, empleados y gerencia. La gerencia tenía
+   cinco porque captura datos, pero el reloj se reinicia con cualquier toque o
+   tecla: escribir no cierra la sesión, solo dejarla sola tres minutos. */
 const INACTIVIDAD_EMPLEADO = 180;  // segundos
-const INACTIVIDAD_GERENTE = 300;   // el gerente captura datos, 60 s no alcanza
+const INACTIVIDAD_GERENTE = 180;   // segundos
 const INTENTOS_MAX = 5;
 /* Segundos que se queda el aviso de confirmación en pantalla. Antes esta
    constante era la ventana para deshacer; ahora la corrección va por el
