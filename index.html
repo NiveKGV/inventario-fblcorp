@@ -121,9 +121,11 @@
     <div class="panel-cuerpo">
       <div class="columna-productos">
         <div class="barra-busqueda">
-          <input id="buscador" type="search" inputmode="search" autocomplete="off" autocorrect="off"
-                 autocapitalize="none" spellcheck="false" placeholder="Buscar un licor por nombre…">
-          <button class="btn btn-fantasma btn-chico" id="buscador-limpiar" hidden>Limpiar</button>
+          <div class="caja-busqueda">
+            <input id="buscador" type="search" inputmode="search" autocomplete="off" autocorrect="off"
+                   autocapitalize="none" spellcheck="false" placeholder="Buscar un licor por nombre…">
+            <button type="button" class="borrar-busqueda" id="buscador-limpiar" aria-label="Borrar la búsqueda" hidden>×</button>
+          </div>
         </div>
         <div class="tiras-categorias" id="tiras-categorias"></div>
         <div class="rejilla-productos" id="rejilla-productos"></div>

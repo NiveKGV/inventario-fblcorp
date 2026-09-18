@@ -24,18 +24,19 @@ import {
 import {
   $, $$, el, mostrarPantalla, abrirModal, cerrarModal, modalAbierto,
   brindis, ocultarBrindis, numero, normalizar, activarComportamientoDeCampos,
+  marcarHojaDelSistema, hojaDelSistemaAbierta,
 } from './ui.js';
 import { abrirAdmin, salirAdmin } from './admin.js';
 
-/* Tres minutos. Antes era 1 minuto y cortaba a gente que estaba escogiendo
-   botellas con las manos ocupadas. El cierre automático sigue existiendo por
-   la misma razón de siempre: que nadie saque licor a nombre de otro porque
-   el anterior dejó la sesión abierta. */
-/* Tres minutos parejo para todos, empleados y gerencia. La gerencia tenía
-   cinco porque captura datos, pero el reloj se reinicia con cualquier toque o
-   tecla: escribir no cierra la sesión, solo dejarla sola tres minutos. */
-const INACTIVIDAD_EMPLEADO = 180;  // segundos
-const INACTIVIDAD_GERENTE = 180;   // segundos
+/* Dos minutos parejo para todos, empleados y gerencia. El cierre automático
+   existe para que nadie saque licor a nombre de otro porque el anterior dejó
+   la sesión abierta. Ha ido y venido: arrancó en 1 minuto (cortaba a quien
+   escogía botellas con las manos ocupadas), subió a 3, y el cliente lo fijó en
+   2. El reloj se reinicia con cualquier toque o tecla, así que escribir nunca
+   cierra la sesión: solo dejarla sola. Además se cierra al bloquear el iPad
+   (ver `cerrarAlBloquear`). */
+const INACTIVIDAD_EMPLEADO = 120;  // segundos
+const INACTIVIDAD_GERENTE = 120;   // segundos
 const INTENTOS_MAX = 5;
 /* Segundos que se queda el aviso de confirmación en pantalla. Antes esta
    constante era la ventana para deshacer; ahora la corrección va por el
@@ -769,16 +770,29 @@ async function confirmarSalida() {
 /* Sesión: cierre automático por inactividad                           */
 /* ------------------------------------------------------------------ */
 
+/* El reloj se lleva con la hora de vencimiento, no contando segundos.
+
+   Antes cada tic restaba uno. Pero iOS congela los temporizadores mientras el
+   iPad está bloqueado o la app en segundo plano: una sesión que quedaba
+   abierta al bloquear volvía, horas después, con los mismos segundos que
+   tenía. Con la hora de vencimiento, al volver se compara contra el reloj real
+   y lo que ya venció, venció. */
 let sesion = null;
 
 function iniciarSesion(segundos, selectorAviso) {
   detenerSesion();
-  sesion = { total: segundos, restan: segundos, aviso: selectorAviso };
-  sesion.intervalo = setInterval(() => {
-    sesion.restan -= 1;
-    pintarSesion();
-    if (sesion.restan <= 0) cerrarPorInactividad();
-  }, 1000);
+  sesion = { total: segundos, vence: Date.now() + segundos * 1000, aviso: selectorAviso };
+  sesion.intervalo = setInterval(revisarSesion, 1000);
+  pintarSesion();
+}
+
+function segundosRestantes() {
+  return Math.max(0, Math.ceil((sesion.vence - Date.now()) / 1000));
+}
+
+function revisarSesion() {
+  if (!sesion) return;
+  if (segundosRestantes() <= 0) { cerrarPorInactividad(); return; }
   pintarSesion();
 }
 
@@ -786,18 +800,19 @@ function pintarSesion() {
   if (!sesion) return;
   const caja = $(sesion.aviso);
   if (!caja) return;
-  const urgente = sesion.restan <= 15;
+  const restan = segundosRestantes();
+  const urgente = restan <= 15;
   caja.classList.toggle('urgente', urgente);
   const texto = caja.querySelector('#sesion-texto');
-  if (texto) texto.textContent = urgente ? `Cierra en ${sesion.restan}s` : 'Sesión activa';
-  else caja.textContent = urgente ? `La sesión cierra en ${sesion.restan}s` : '';
+  if (texto) texto.textContent = urgente ? `Cierra en ${restan}s` : 'Sesión activa';
+  else caja.textContent = urgente ? `La sesión cierra en ${restan}s` : '';
   const barra = caja.querySelector('#sesion-barra');
-  if (barra) barra.style.width = `${Math.max(0, (sesion.restan / sesion.total) * 100)}%`;
+  if (barra) barra.style.width = `${Math.max(0, (restan / sesion.total) * 100)}%`;
 }
 
 function reiniciarSesion() {
   if (!sesion) return;
-  sesion.restan = sesion.total;
+  sesion.vence = Date.now() + sesion.total * 1000;
   pintarSesion();
 }
 
@@ -806,7 +821,8 @@ function detenerSesion() {
   sesion = null;
 }
 
-function cerrarPorInactividad() {
+function cerrarPorInactividad({ bloqueo = false } = {}) {
+  if (!sesion) return;
   detenerSesion();
   const nombre = estado.empleado?.nombre;
   if (modalAbierto()) cerrarModal();
@@ -814,15 +830,47 @@ function cerrarPorInactividad() {
   ocultarBrindis();
   mostrarAcceso();
   brindis({
-    texto: 'Sesión cerrada por inactividad',
+    texto: bloqueo ? 'Sesión cerrada: se bloqueó el iPad' : 'Sesión cerrada por inactividad',
     sub: nombre ? `Nadie más puede sacar botellas a nombre de ${nombre}.` : '',
-    segundos: 5,
+    segundos: 6,
   });
 }
 
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => {
   document.addEventListener(ev, reiniciarSesion, { passive: true, capture: true });
 });
+
+/* Cierre al bloquear el iPad. Si alguien bloquea la pantalla con la sesión
+   abierta, el siguiente que la desbloquee no la encuentra abierta. Lo mismo
+   pasa si se sale de la app a otra: la sesión no se queda esperando detrás.
+
+   La excepción son las hojas del propio iOS —compartir, «Guardar en Archivos»,
+   escoger un archivo—, que pueden dejar la página oculta sin que nadie haya
+   bloqueado nada. Sin esta excepción, el gerente que guarda un respaldo o
+   escoge uno para restaurar quedaría fuera a mitad del paso. Mientras una de
+   esas hojas está abierta manda el reloj de inactividad, que al volver se
+   compara contra la hora real. */
+document.addEventListener('visibilitychange', () => {
+  if (!sesion) return;
+  if (document.visibilityState === 'hidden') {
+    if (!hojaDelSistemaAbierta()) cerrarPorInactividad({ bloqueo: true });
+  } else {
+    revisarSesion();
+  }
+});
+
+// Las hojas de escoger archivo se abren desde un <input type="file">: se marca
+// al tocarlo y se desmarca cuando vuelve con el archivo o con el primer toque
+// dentro de la página, que prueba que la hoja ya se cerró.
+document.addEventListener('click', (ev) => {
+  if (ev.target instanceof HTMLInputElement && ev.target.type === 'file') marcarHojaDelSistema(true);
+}, { capture: true });
+document.addEventListener('change', (ev) => {
+  if (ev.target instanceof HTMLInputElement && ev.target.type === 'file') marcarHojaDelSistema(false);
+}, { capture: true });
+document.addEventListener('pointerdown', (ev) => {
+  if (!(ev.target instanceof HTMLInputElement && ev.target.type === 'file')) marcarHojaDelSistema(false);
+}, { capture: true });
 
 /* ------------------------------------------------------------------ */
 /* Reloj de la aplicación                                              */

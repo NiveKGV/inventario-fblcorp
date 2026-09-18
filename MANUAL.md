@@ -58,18 +58,30 @@ se llevó y a qué hora.
 corrige un gerente desde el Historial con el botón **Revertir**. Por eso la
 pantalla de confirmación muestra la lista completa: es el momento de mirarla.
 
-**La sesión se cierra sola a los tres minutos de no tocar nada.** Aplica igual a
+**La sesión se cierra sola a los dos minutos de no tocar nada.** Aplica igual a
 los empleados y a la gerencia. Es a propósito: así nadie saca botellas a nombre
 de otro ni se queda el área de administración abierta sobre la mesa. El reloj se
 reinicia con cualquier toque, así que escribir no cierra nada — solo dejar el
 iPad solo.
+
+**También se cierra al bloquear el iPad** o al salir de la app a otra. Si
+alguien bloquea la pantalla y se olvida de cerrar sesión, el siguiente que la
+desbloquee encuentra el teclado del código, no la sesión del anterior. La única
+excepción es mientras el iPad muestra su propia hoja para guardar o escoger un
+archivo (el respaldo, por ejemplo): ahí no se cierra, para no sacar al gerente a
+mitad del paso.
 
 ### El buscador
 
 En el panel hay una caja de búsqueda arriba. Escribiendo "patron" aparece Patrón
 Silver aunque no se escriba la tilde; escribiendo "don julio" aparecen los dos;
 escribiendo "ron" aparece la categoría completa y escribiendo "caja", las
-cervezas. Para volver a las categorías, se toca **Limpiar** o cualquier categoría.
+cervezas.
+
+**La X** a la derecha del buscador borra todo lo escrito de un toque, sin ir
+letra por letra. Sale en todos los buscadores del sistema en cuanto escribes
+algo: el del panel, el del inventario, el del conteo, el de devoluciones, el de
+salida manual y el de la recepción.
 
 ### Quien trabaja en más de una barra
 
@@ -230,6 +242,11 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
 4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar**.
 
 La diferencia queda guardada con tu nombre. Nada se borra nunca.
+
+**El buscador del conteo** filtra por nombre o por categoría («mezcal» trae
+todos los mezcales), sin importar las tildes. Lo que ya escribiste en un
+producto **no se pierde** al buscar otro: puedes buscar, contar, buscar el
+siguiente, y al final registrar todo junto.
 
 **Para ir más rápido:** después de escribir una cantidad, la tecla **intro** del
 teclado salta sola al próximo producto, sin tener que tocar la pantalla. Si

@@ -20,7 +20,7 @@ import {
 } from './modelo.js';
 import {
   $, el, mostrarPantalla, abrirModal, cerrarModal, confirmar,
-  brindis, dinero, numero, descargar, aCSV, normalizar,
+  brindis, dinero, numero, descargar, aCSV, normalizar, conBorrar,
 } from './ui.js';
 import { interpretar as interpretarCatalogo, aplicar as aplicarCatalogo } from './importar.js';
 
@@ -397,7 +397,7 @@ async function vistaInventario() {
     seccion('Catálogo del almacén',
       'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
       el('div', { clase: 'seccion-barra' }, [
-        el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [buscador]),
+        el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [conBorrar(buscador)]),
         el('button', { clase: 'btn btn-primario btn-chico', texto: 'Agregar producto', onclick: () => modalProducto(null) }),
       ]),
       contenedor),
@@ -667,7 +667,7 @@ async function vistaCompra() {
 
     seccion('Recibir la orden',
       'Ajusta la columna Recibido con lo que de verdad entró —no con lo que se pidió— y confirma. Entra al almacén solo lo que escribas aquí. Si llegó algo que no estaba en la lista, búscalo y añádelo.',
-      campo('Añadir un producto que no está en la lista', buscador),
+      campo('Añadir un producto que no está en la lista', conBorrar(buscador)),
       resultados,
       contenedorTabla,
       campo('Referencia', proveedor, 'Queda en el historial junto a la entrada.'),
@@ -715,7 +715,7 @@ function exportarCompra(lista) {
 /* ------------------------------------------------------------------ */
 
 async function vistaConteo() {
-  const productos = await productosActivos();
+  const [productos, categorias] = await Promise.all([productosActivos(), DB.todos('categorias')]);
   /* Lo que entró hoy, para tenerlo delante mientras se cuenta. La escena es
      ésta: se cuentan 12, el sistema dice 8, y alguien se va a pasar media
      hora buscando un descuadre que no existe — entraron 4 esta mañana y el
@@ -751,7 +751,9 @@ async function vistaConteo() {
       },
     });
     const celdaDif = el('td', { clase: 'num', texto: '—', estilo: { color: 'var(--texto-3)' } });
-    return el('tr', {}, [
+    return el('tr', {
+      datos: { busqueda: normalizar(`${p.nombre} ${nombreDeCategoria(categorias, p.categoriaId)} ${p.tamano || ''}`) },
+    }, [
       el('td', { texto: p.nombre }),
       entroHoy.size
         ? el('td', {
@@ -766,11 +768,30 @@ async function vistaConteo() {
     ].filter(Boolean));
   });
 
+  /* El buscador esconde renglones, no los vuelve a dibujar. Si los
+     redibujara, lo ya contado en un producto se borraría al buscar el
+     siguiente — y en un conteo de ciento treinta productos eso es justo lo
+     que se hace: buscar, contar, buscar el otro. Lo contado sigue sumando
+     aunque su renglón esté escondido. */
+  const buscador = el('input', { type: 'search', placeholder: 'Buscar producto o categoría…', autocomplete: 'off' });
+  const sinResultados = el('p', { clase: 'vacio', texto: 'Ningún producto con ese nombre.', hidden: true });
+  buscador.oninput = () => {
+    const q = normalizar(buscador.value.trim());
+    let visibles = 0;
+    for (const tr of filas) {
+      tr.hidden = !!q && !tr.dataset.busqueda.includes(q);
+      if (!tr.hidden) visibles += 1;
+    }
+    sinResultados.hidden = visibles > 0;
+  };
+
   return el('div', {}, [
     seccion('Conteo físico',
       'Escribe lo que de verdad hay. Solo se registran los productos donde escribas algo distinto a lo que dice el sistema. Los demás no se tocan.',
       resumen,
       campo('Motivo del ajuste', motivo, 'Obligatorio. Queda en el historial junto a cada diferencia.'),
+      campo('Buscar', conBorrar(buscador), 'Lo que ya contaste no se pierde al buscar otro producto.'),
+      sinResultados,
       tabla([
         'Producto',
         ...(entroHoy.size ? [{ t: 'Entró hoy', num: true }] : []),
@@ -862,7 +883,7 @@ async function vistaDevolucion() {
         campo('Restaurante que devuelve', restaurante),
         campo('Motivo', motivo, 'Obligatorio.'),
       ]),
-      campo('Buscar', buscador),
+      campo('Buscar', conBorrar(buscador)),
       contenedor,
       el('div', { estilo: { marginTop: '18px' } }, [
         el('button', {
@@ -1017,7 +1038,7 @@ async function vistaSalidaManual() {
         campo('Restaurante que se lo lleva', restaurante),
         campo('Motivo', motivo, 'Opcional. Si lo escribes, queda en el historial junto a la salida.'),
       ]),
-      campo('Buscar', buscador),
+      campo('Buscar', conBorrar(buscador)),
       contenedor,
       el('div', { estilo: { marginTop: '18px' } }, [
         el('button', { clase: 'btn btn-primario', texto: 'Registrar salida', onclick: registrar }),

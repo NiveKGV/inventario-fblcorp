@@ -197,13 +197,29 @@ function normalizar(texto) {
    sacarla de memoria: no hay relanzamiento y por lo tanto no hay fogonazo. Se
    cae al enlace de siempre si el navegador no la trae o no acepta archivos, que
    es lo que pasa en el escritorio. */
+/* Mientras iOS muestra una hoja propia —compartir, «Guardar en Archivos»,
+   escoger un archivo— la app puede quedar oculta sin que nadie haya bloqueado
+   el iPad. El cierre de sesión por bloqueo (`app.js`) pregunta esto para no
+   sacar al gerente a mitad de un respaldo. Caduca sola a los diez minutos por
+   si una hoja se cerró sin avisar: nunca deja la protección apagada de más. */
+let hojaDelSistemaDesde = 0;
+function marcarHojaDelSistema(abierta) { hojaDelSistemaDesde = abierta ? Date.now() : 0; }
+function hojaDelSistemaAbierta() {
+  return hojaDelSistemaDesde > 0 && Date.now() - hojaDelSistemaDesde < 10 * 60 * 1000;
+}
+
 async function descargar(nombreArchivo, contenido, tipo = 'application/json') {
   const blob = new Blob([contenido], { type: `${tipo};charset=utf-8` });
 
   try {
     const archivo = new File([blob], nombreArchivo, { type: `${tipo};charset=utf-8` });
     if (navigator.canShare?.({ files: [archivo] })) {
-      await navigator.share({ files: [archivo], title: nombreArchivo });
+      marcarHojaDelSistema(true);
+      try {
+        await navigator.share({ files: [archivo], title: nombreArchivo });
+      } finally {
+        marcarHojaDelSistema(false);
+      }
       return;
     }
   } catch (e) {
@@ -327,8 +343,29 @@ function siguienteCampo(actual) {
   return i >= 0 && i < campos.length - 1 ? campos[i + 1] : null;
 }
 
+/* Envuelve un buscador con la X que lo vacía de un toque. La X se muestra y se
+   esconde sola por CSS (`.caja-busqueda`); aquí solo se decide qué pasa al
+   tocarla: se vacía el campo y se avisa con un evento `input`, que es lo que
+   escuchan todos los buscadores para repintar. El foco vuelve al campo porque
+   quien borra una búsqueda casi siempre va a escribir otra. */
+function conBorrar(input) {
+  const x = el('button', {
+    type: 'button',
+    clase: 'borrar-busqueda',
+    'aria-label': 'Borrar la búsqueda',
+    texto: '×',
+    onclick: () => {
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    },
+  });
+  return el('div', { clase: 'caja-busqueda' }, [input, x]);
+}
+
 export {
-  $, $$, el, mostrarPantalla, pantallaActual,
+  $, $$, el, mostrarPantalla, pantallaActual, conBorrar,
+  marcarHojaDelSistema, hojaDelSistemaAbierta,
   abrirModal, cerrarModal, modalAbierto, confirmar,
   brindis, ocultarBrindis,
   dinero, numero, normalizar, descargar, aCSV,

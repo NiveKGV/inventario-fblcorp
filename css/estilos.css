@@ -318,6 +318,27 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
 .barra-busqueda input::placeholder { color: var(--texto-3); }
 .barra-busqueda input:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
 .barra-busqueda input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.barra-busqueda .caja-busqueda { flex: 1; }
+
+/* La X que borra la búsqueda completa de un toque. Va dentro del campo, a la
+   derecha, y solo se ve cuando hay algo escrito: `:placeholder-shown` lo
+   decide sin JavaScript, así que también desaparece cuando el código vacía el
+   campo por su cuenta (al añadir un producto a la recepción, por ejemplo).
+   Todos los buscadores llevan placeholder, que es lo que hace funcionar esto.
+   La X nativa de iOS se apaga para que no salgan dos. */
+.caja-busqueda { position: relative; }
+.caja-busqueda input { width: 100%; padding-right: 56px; }
+.caja-busqueda input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.borrar-busqueda {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border-radius: 50%; border: 0;
+  background: var(--panel-2); color: var(--texto-2);
+  font-size: 24px; line-height: 1; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+}
+.borrar-busqueda:active { background: var(--borde); color: var(--texto); }
+.caja-busqueda input:placeholder-shown ~ .borrar-busqueda,
+.borrar-busqueda[hidden] { display: none; }
 
 .tiras-categorias {
   display: flex;

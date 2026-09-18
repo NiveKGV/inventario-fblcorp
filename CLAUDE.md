@@ -240,13 +240,21 @@ Detalles que sostienen esta publicación y no hay que romper:
   tomara el color del local, en La Grieta saldría rojo y se leería como borrar.
 - **Día operativo desde las 5:00 a.m.** Un bar cierra a las 2. Con día calendario,
   un turno se parte en dos fechas y los reportes no cuadran con la realidad.
-- **Cierre de sesión a los 180 segundos, parejo para todos** (`INACTIVIDAD_EMPLEADO`
+- **Cierre de sesión a los 120 segundos, parejo para todos** (`INACTIVIDAD_EMPLEADO`
   e `INACTIVIDAD_GERENTE`). Sin cierre automático el registro de auditoría no
-  vale nada: las botellas del siguiente quedarían a nombre del anterior. Arrancó
-  en 60 y se subió a 3 minutos: con un minuto, buscar seis licores en el almacén
-  cerraba la sesión a media compra. La gerencia tuvo 300 por captura de datos y
-  bajó a 180 a pedido del cliente — el reloj se reinicia con cualquier evento de
-  entrada, así que escribir nunca cierra la sesión.
+  vale nada: las botellas del siguiente quedarían a nombre del anterior. Ha ido
+  60 → 180 → 120 (gerencia tuvo 300); lo fijó el cliente. El reloj se reinicia
+  con cualquier evento de entrada, así que escribir nunca cierra la sesión.
+- **El reloj de sesión guarda la hora de vencimiento, no cuenta tics.** iOS
+  congela los temporizadores con el iPad bloqueado: contando tics, una sesión
+  abierta al bloquear volvía horas después con los mismos segundos que tenía.
+- **La sesión se cierra al bloquear el iPad** (`visibilitychange` → `hidden`),
+  salvo mientras hay una hoja del sistema abierta (compartir / Guardar en
+  Archivos / escoger archivo), que también puede ocultar la página. Esa marca
+  vive en `ui.js` (`marcarHojaDelSistema`): la pone `descargar()` alrededor de
+  `navigator.share` y `app.js` al tocar un `<input type=file>`; la quita el
+  archivo elegido o el primer toque dentro de la página, y caduca sola a los 10
+  minutos. Sin la excepción, el gerente quedaba fuera a mitad de un respaldo.
 - **Nombre de base parametrizable** (`globalThis.__ALMACEN_DB_PRUEBAS__`): existe
   solo para que `pruebas.html` no toque el inventario real. La página verifica el
   nombre y se niega a correr si apunta a la base de producción.
