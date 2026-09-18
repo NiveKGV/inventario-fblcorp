@@ -127,6 +127,10 @@ function tabla(encabezados, filas) {
   ]);
 }
 
+function nombreDeCategoria(categorias, id) {
+  return categorias.find((c) => c.id === id)?.nombre || '';
+}
+
 function etiquetaEstado(e) {
   return el('span', { clase: `etiqueta ${e.clave}`, texto: e.etiqueta });
 }
@@ -348,15 +352,29 @@ async function vistaInventario() {
   const contenedor = el('div', { clase: 'tabla-envoltura' });
 
   const pintar = () => {
-    const q = buscador.value.trim().toLowerCase();
-    const lista = productos.filter((p) => !q || p.nombre.toLowerCase().includes(q));
+    /* `normalizar` y no `toLowerCase`: en el almacén nadie escribe «Tía María»
+       con tilde, y sin esto el producto no aparecía. Se busca también por
+       categoría y tamaño, igual que en el panel del empleado, para que
+       «mezcal» traiga la categoría completa. */
+    const q = normalizar(buscador.value.trim());
+    const lista = productos.filter((p) => !q || normalizar(
+      `${p.nombre} ${nombreDeCategoria(categorias, p.categoriaId)} ${p.tamano || ''}`,
+    ).includes(q));
     contenedor.replaceChildren(tabla(
       ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Máximo', num: true },
         { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true }, { t: 'Costo', num: true }, 'Estado', ''],
       lista.map((p) => {
         const cat = categorias.find((c) => c.id === p.categoriaId);
         const cs = semanal.get(p.id) || 0;
-        return el('tr', {}, [
+        /* La fila entera abre el editor. Con el iPad de pie, la columna del
+           botón se sale de la pantalla; tocar el renglón siempre funciona.
+           El botón se queda: es lo que le dice a alguien que esto se edita.
+           La guarda del `closest('button')` evita abrir el modal dos veces
+           cuando el toque sí cayó sobre el botón. */
+        return el('tr', {
+          clase: 'fila-tocable',
+          onclick: (ev) => { if (!ev.target.closest('button')) modalProducto(p); },
+        }, [
           el('td', { texto: p.nombre }),
           el('td', { texto: cat ? cat.nombre : '—' }),
           el('td', { clase: 'num', texto: String(p.existencia) }),
@@ -810,8 +828,11 @@ async function vistaDevolucion() {
   const contenedor = el('div');
 
   const pintar = () => {
-    const q = buscador.value.trim().toLowerCase();
-    const lista = productos.filter((p) => !q || p.nombre.toLowerCase().includes(q)).slice(0, 40);
+    // Sin acentos, como en todos los demás buscadores del sistema.
+    const q = normalizar(buscador.value.trim());
+    const lista = productos
+      .filter((p) => !q || normalizar(`${p.nombre} ${p.tamano || ''}`).includes(q))
+      .slice(0, 40);
     contenedor.replaceChildren(tabla(
       ['Producto', { t: 'En almacén', num: true }, { t: 'Devuelven', num: true }],
       lista.map((p) => {

@@ -595,7 +595,18 @@ tbody tr:active { background: var(--panel); }
 .fila-detalle .desglose th { font-size: 11px; }
 .fila-detalle .desglose td, .fila-detalle .desglose th { padding: 7px 10px; }
 .fila-detalle .desglose tbody tr:last-child td { border-bottom: none; }
-.tabla-envoltura { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--r); overflow: hidden; }
+/* Se desliza de lado cuando la tabla no cabe. Antes era `overflow: hidden`, y
+   con el iPad de pie la tabla del inventario se cortaba: la última columna —la
+   del botón Editar— quedaba fuera de la pantalla y no había forma de llegar a
+   ella sin voltear el aparato. En el almacén el iPad está parado en su base.
+   Las filas del inventario además se tocan enteras, que es lo que de verdad
+   resuelve el problema; esto es la red de seguridad para las demás tablas. */
+.tabla-envoltura {
+  background: var(--panel); border: 1px solid var(--borde); border-radius: var(--r);
+  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+}
+.tabla-envoltura table { min-width: max-content; }
+tr.fila-tocable { cursor: pointer; }
 .tabla-envoltura table tbody tr:last-child td { border-bottom: 0; }
 
 .etiqueta { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: var(--panel-2); color: var(--texto-2); }
