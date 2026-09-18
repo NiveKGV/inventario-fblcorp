@@ -817,6 +817,67 @@ igual(movPrepa.localElegido, true,
 igual(movPrepa.origen || 'empleado', 'empleado',
   'Sigue siendo una salida del panel del empleado, no de gerencia');
 
+/* --- Conteo que también anota lo que coincidió --- */
+
+const contable = await producto('Ron contado', 6);
+const contable2 = await producto('Ron que falta', 6);
+const movsAntesConteo = (await DB.porIndice('movimientos', 'porProducto', contable.id)).length;
+await lanza(
+  () => M.registrarLote({
+    tipo: 'ajuste', lineas: [{ productoId: contable.id, nuevaExistencia: 6, cantidad: 1 }], ...EMP, motivo: 'Conteo',
+  }),
+  'ningún cambio', 'Sin la opción, un conteo que solo coincide no registra nada (como siempre)',
+);
+const { loteId: loteConteo } = await M.registrarLote({
+  tipo: 'ajuste',
+  lineas: [
+    { productoId: contable.id, nuevaExistencia: 6, cantidad: 1 },
+    { productoId: contable2.id, nuevaExistencia: 4, cantidad: 1 },
+  ],
+  ...EMP, motivo: 'Conteo del jueves', incluirSinDiferencia: true,
+});
+const lineasConteo = await DB.porIndice('movimientos', 'porLote', loteConteo);
+igual(lineasConteo.length, 2, 'Con la opción, el conteo anota también el producto que coincidió');
+const coincide = lineasConteo.find((m) => m.productoId === contable.id);
+igual([coincide.delta, coincide.sinDiferencia, coincide.existenciaDespues], [0, true, 6],
+  'Lo que coincidió queda como ajuste de cero, marcado sin diferencia');
+igual(await existenciaDe(contable.id), 6, 'Anotar lo que coincidió no mueve la existencia');
+igual(await existenciaDe(contable2.id), 4, 'El que tenía diferencia sí se iguala a lo contado');
+igual((await DB.porIndice('movimientos', 'porProducto', contable.id)).length, movsAntesConteo + 1,
+  'Queda un movimiento más en la historia del producto contado');
+
+/* --- Todo lo que se sumó, por día --- */
+
+const sumable = await producto('Tía María', 2);
+const { loteId: loteOrden } = await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: sumable.id, cantidad: 12 }], ...EMP, motivo: 'Factura 555',
+});
+const { loteId: loteOrdenMala } = await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: sumable.id, cantidad: 5 }], ...EMP, motivo: 'Factura equivocada',
+});
+await M.revertirLote(loteOrdenMala, { ...EMP, motivo: 'Se registró dos veces' });
+await M.registrarLote({
+  tipo: 'devolucion', lineas: [{ productoId: sumable.id, cantidad: 1 }], ...EMP, restauranteId: REST, motivo: 'Sin abrir',
+});
+
+const revertidos = await M.lotesRevertidos();
+anotar(revertidos.has(loteOrdenMala) && !revertidos.has(loteOrden),
+  'lotesRevertidos distingue la orden revertida de la buena');
+
+const movsSumable = (await M.movimientosPeriodo(hoy, hoy)).filter((m) => m.productoId === sumable.id);
+const [diaSumas] = M.sumasPorDia(movsSumable, revertidos);
+igual(diaSumas.dia, hoy, 'Lo que se sumó hoy queda agrupado en el día operativo de hoy');
+igual(diaSumas.unidades, 13, 'El día suma la orden (12) y la devolución (1), no la orden revertida');
+igual([diaSumas.porTipo.entrada, diaSumas.porTipo.devolucion], [12, 1],
+  'Separa lo que llegó del proveedor de lo que devolvieron las barras');
+igual(diaSumas.lineas.filter((l) => l.revertida).length, 1,
+  'La orden revertida se muestra, marcada, en vez de desaparecer');
+anotar(!diaSumas.lineas.some((l) => l.tipo === 'reversion'),
+  'La reversión en sí no aparece como algo que se sumó');
+
+const ordenBuena = M.entradasPorProducto(movsSumable, revertidos).find((e) => e.clave === sumable.id);
+igual(ordenBuena.unidades, 12, '«Lo que entró» ya no cuenta una orden que se revirtió');
+
 const soloJarabe = (await M.movimientosPeriodo(hoy, hoy)).filter((m) => m.productoId === paraPrepa.id);
 const consumoPrepa = M.porRestaurante(soloJarabe);
 igual([consumoPrepa.length, consumoPrepa[0].clave, consumoPrepa[0].unidades], [1, 'prepa', 4],

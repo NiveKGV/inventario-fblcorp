@@ -140,10 +140,15 @@ function validarLineas(lineas) {
 /* Registra un lote completo en una sola transacción: o entra todo, o no entra
    nada. Si el iPad se apaga a media confirmación, no queda un inventario
    descuadrado. */
+/* `incluirSinDiferencia` es solo para el conteo físico. Sin él, un producto
+   contado que coincide con el sistema no deja rastro, y a la semana no hay
+   forma de saber si se contó o se saltó. Con él queda un ajuste de cero,
+   marcado `sinDiferencia`, que no mueve la existencia ni ningún reporte de
+   consumo pero sí dice «el jueves se contó y había lo que decía el sistema». */
 async function registrarLote({
   tipo, lineas, empleadoId, empleadoNombre, restauranteId = null,
   motivo = '', permitirNegativo = false, autorizadoPor = null,
-  origen = 'empleado', localElegido = false,
+  origen = 'empleado', localElegido = false, incluirSinDiferencia = false,
 }) {
   const def = TIPOS[tipo];
   if (!def) throw new Error(`Tipo de movimiento desconocido: ${tipo}`);
@@ -176,7 +181,7 @@ async function registrarLote({
           throw new Error('La existencia contada debe ser un entero de cero o más.');
         }
         delta = nueva - antes;
-        if (delta === 0) continue;
+        if (delta === 0 && !incluirSinDiferencia) continue;
       } else {
         delta = def.signo * Number(linea.cantidad);
       }
@@ -224,6 +229,7 @@ async function registrarLote({
            seguir contando lo que pasó ese día. */
         localElegido: def.requiereRestaurante ? !!localElegido : false,
         negativoPermitido: despues < 0,
+        sinDiferencia: tipo === 'ajuste' && delta === 0,
         fechaISO,
         diaOperativo: dia,
         revierteA: null,
@@ -352,10 +358,13 @@ function agregar(movs, claveFn) {
    Solo cuenta `entrada`. Una devolución también sube la existencia, pero es
    licor que ya se había comprado y vuelve de un local: sumarla aquí inflaría
    lo que se le pidió al proveedor. */
-function entradasPorProducto(movs) {
+function entradasPorProducto(movs, revertidos = new Set()) {
   const mapa = new Map();
   for (const m of movs) {
     if (m.tipo !== 'entrada' || m.delta <= 0) continue;
+    // Una orden recibida por error y revertida no entró. La reversión es de
+    // tipo 'reversion', así que sin esta línea la orden seguía contando aquí.
+    if (revertidos.has(m.loteId)) continue;
     const acc = mapa.get(m.productoId)
       || { clave: m.productoId, unidades: 0, valor: 0, veces: 0, ultima: null };
     acc.unidades += m.delta;
@@ -365,6 +374,65 @@ function entradasPorProducto(movs) {
     mapa.set(m.productoId, acc);
   }
   return [...mapa.values()].sort((a, b) => b.unidades - a.unidades);
+}
+
+/* Los lotes que alguien revirtió. Hace falta preguntarlo a la base y no
+   deducirlo de los movimientos del período: una orden recibida el lunes y
+   revertida el miércoles tiene su reversión fuera de un reporte «solo lunes».
+   El índice porRevierteA contiene únicamente reversiones, así que es chico. */
+async function lotesRevertidos() {
+  const reversiones = await DB.tx(['movimientos'], 'readonly',
+    (s) => DB.pedir(s.movimientos.index('porRevierteA').getAll()));
+  return new Set(reversiones.map((m) => m.revierteA));
+}
+
+/* Cómo subió la existencia, en palabras de quien lee el registro. */
+const COMO_SE_SUMO = {
+  entrada: 'Llegó del proveedor',
+  devolucion: 'Devolución',
+  ajuste: 'Conteo físico',
+};
+
+/* Todo lo que se sumó al almacén, un grupo por día operativo.
+
+   Existe porque la pregunta del cliente es «¿qué metimos el jueves?», y hasta
+   ahora la respuesta estaba repartida: las órdenes en el Historial mezcladas
+   con cientos de salidas, y el reporte «Lo que entró» sumado por producto sin
+   decir qué día. Aquí cada día es un renglón y adentro está qué entró.
+
+   Cuenta las tres formas de sumar: la orden del proveedor, la devolución de una
+   barra y el conteo que encontró de más. Separadas en `porTipo`, porque no son
+   lo mismo — solo la primera se le compró a alguien.
+
+   Lo revertido se muestra, marcado, pero no suma: esconderlo haría creer que
+   nunca se registró, y sumarlo inflaría el día. */
+function sumasPorDia(movs, revertidos = new Set()) {
+  const dias = new Map();
+  for (const m of movs) {
+    if (!(m.tipo in COMO_SE_SUMO) || !(m.delta > 0)) continue;
+    let d = dias.get(m.diaOperativo);
+    if (!d) {
+      d = {
+        dia: m.diaOperativo, unidades: 0, valor: 0, productos: new Set(),
+        porTipo: { entrada: 0, devolucion: 0, ajuste: 0 }, lineas: [],
+      };
+      dias.set(m.diaOperativo, d);
+    }
+    const revertida = revertidos.has(m.loteId);
+    d.lineas.push({ ...m, revertida });
+    if (revertida) continue;
+    d.unidades += m.delta;
+    d.valor += m.delta * (m.costoUnitario || 0);
+    d.productos.add(m.productoId);
+    d.porTipo[m.tipo] += m.delta;
+  }
+  return [...dias.values()]
+    .map((d) => ({
+      ...d,
+      productos: d.productos.size,
+      lineas: d.lineas.sort((a, b) => (a.fechaISO < b.fechaISO ? -1 : 1)),
+    }))
+    .sort((a, b) => (a.dia < b.dia ? 1 : -1));
 }
 
 const porRestaurante = (movs) => agregar(movs, (m) => m.restauranteId);
@@ -418,5 +486,5 @@ export {
   estadoStock, localesDe, registrarLote, revertirLote,
   productosActivos, listaCompra, movimientosPeriodo,
   porRestaurante, porEmpleado, porProducto, entradasPorProducto,
-  consumoSemanal, resumenAlertas,
+  consumoSemanal, resumenAlertas, lotesRevertidos, sumasPorDia, COMO_SE_SUMO,
 };

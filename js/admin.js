@@ -15,8 +15,8 @@ import {
 import {
   estadoStock, localesDe, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, entradasPorProducto,
-  consumoSemanal,
-  resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, TIPOS,
+  consumoSemanal, lotesRevertidos, sumasPorDia, COMO_SE_SUMO,
+  resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, horaPR, TIPOS,
 } from './modelo.js';
 import {
   $, el, mostrarPantalla, abrirModal, cerrarModal, confirmar,
@@ -35,6 +35,7 @@ const TABS = [
   ['resumen', 'Resumen'],
   ['inventario', 'Inventario'],
   ['compra', 'Lista de compra'],
+  ['entradas', 'Entradas'],
   ['conteo', 'Conteo físico'],
   ['devolucion', 'Devoluciones'],
   ['salida', 'Salida manual'],
@@ -87,6 +88,7 @@ async function render() {
     resumen: vistaResumen,
     inventario: vistaInventario,
     compra: vistaCompra,
+    entradas: vistaEntradas,
     conteo: vistaConteo,
     devolucion: vistaDevolucion,
     salida: vistaSalidaManual,
@@ -248,7 +250,7 @@ async function vistaResumen() {
      salió el mes pasado es lo que hay que asegurarse de no quedarse sin. */
   const movsMes = await movimientosPeriodo(sumarDias(hoy, -30), hoy);
   const masSalen = porProducto(movsMes).slice(0, 5);
-  const entraronMes = entradasPorProducto(movsMes);
+  const entraronMes = entradasPorProducto(movsMes, await lotesRevertidos());
 
   const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
   const enEstado = (clave) => productos.filter((p) => estadoStock(p).clave === clave).sort(porNombre);
@@ -366,14 +368,15 @@ async function vistaInventario() {
       lista.map((p) => {
         const cat = categorias.find((c) => c.id === p.categoriaId);
         const cs = semanal.get(p.id) || 0;
-        /* La fila entera abre el editor. Con el iPad de pie, la columna del
-           botón se sale de la pantalla; tocar el renglón siempre funciona.
-           El botón se queda: es lo que le dice a alguien que esto se edita.
-           La guarda del `closest('button')` evita abrir el modal dos veces
-           cuando el toque sí cayó sobre el botón. */
+        /* Tocar el renglón abre la ficha del producto: su historia completa,
+           con un botón para editarlo. El botón Editar de la última columna
+           sigue yendo directo al editor. Con el iPad de pie esa columna se
+           sale de la pantalla, así que desde la ficha también se llega.
+           La guarda del `closest('button')` evita que un toque sobre Editar
+           abra además la ficha. */
         return el('tr', {
           clase: 'fila-tocable',
-          onclick: (ev) => { if (!ev.target.closest('button')) modalProducto(p); },
+          onclick: (ev) => { if (!ev.target.closest('button')) modalFichaProducto(p); },
         }, [
           el('td', { texto: p.nombre }),
           el('td', { texto: cat ? cat.nombre : '—' }),
@@ -395,7 +398,8 @@ async function vistaInventario() {
 
   return el('div', {}, [
     seccion('Catálogo del almacén',
-      'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
+      'Toca un producto para ver todo lo que le ha pasado: cuándo entró, cuándo salió, cuándo se contó y cuántas quedaban después de cada cosa. '
+      + 'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
       el('div', { clase: 'seccion-barra' }, [
         el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [conBorrar(buscador)]),
         el('button', { clase: 'btn btn-primario btn-chico', texto: 'Agregar producto', onclick: () => modalProducto(null) }),
@@ -711,6 +715,194 @@ function exportarCompra(lista) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Entradas: todo lo que se sumó, día por día                          */
+/* ------------------------------------------------------------------ */
+
+/* `dia` es un día operativo 'YYYY-MM-DD', no un instante. Se ancla al
+   mediodía UTC y se formatea en UTC para que ninguna zona lo corra a la
+   víspera. */
+const FMT_DIA = new Intl.DateTimeFormat('es-PR', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
+function nombreDelDia(dia, { mayuscula = true } = {}) {
+  const t = FMT_DIA.format(new Date(`${dia}T12:00:00Z`));
+  return mayuscula ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+let rangoEntradas = null;
+
+async function vistaEntradas() {
+  if (!rangoEntradas) rangoEntradas = rangoPreset('30');
+  const [desde, hasta] = rangoEntradas;
+  const [movs, revertidos, restaurantes] = await Promise.all([
+    movimientosPeriodo(desde, hasta), lotesRevertidos(), DB.todos('restaurantes'),
+  ]);
+  const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
+  const dias = sumasPorDia(movs, revertidos);
+  const total = dias.reduce((s, d) => s + d.unidades, 0);
+  const valor = dias.reduce((s, d) => s + d.valor, 0);
+  const periodo = desde === hasta
+    ? nombreDelDia(desde)
+    : `Del ${nombreDelDia(desde, { mayuscula: false })} al ${nombreDelDia(hasta, { mayuscula: false })}`;
+
+  return el('div', {}, [
+    seccion('Lo que se sumó al almacén, día por día',
+      'Cada renglón es un día en que subió el inventario. Tócalo para ver qué entró, cuánto, cómo, quién y a qué hora. '
+      + 'Cuenta por separado la mercancía que llegó del proveedor, lo que devolvieron las barras y lo que un conteo físico encontró de más.',
+      el('div', { clase: 'seccion-barra' }, [
+        ...[...PRESETS, ['90', 'Últimos 90 días']].map(([clave, etiqueta]) => el('button', {
+          clase: 'btn btn-chico btn-fantasma',
+          texto: etiqueta,
+          onclick: () => { rangoEntradas = rangoPreset(clave); render(); },
+        })),
+      ]),
+      el('p', {
+        clase: 'desc',
+        texto: dias.length
+          ? `${periodo}: ${total} ${total === 1 ? 'botella' : 'botellas'} en ${dias.length} ${dias.length === 1 ? 'día' : 'días'} · ${dinero(valor)} a costo.`
+          : `${periodo}: no se sumó nada al almacén.`,
+      }),
+      dias.length
+        ? tabla(['Día', { t: 'Botellas', num: true }, { t: 'Productos', num: true }, 'Cómo entró', { t: 'Valor', num: true }],
+          dias.flatMap((d) => filaDia(d, nombreRest)))
+        : el('p', { clase: 'vacio', texto: 'Prueba con un período más largo.' })),
+  ]);
+}
+
+function filaDia(d, nombreRest) {
+  const como = [
+    d.porTipo.entrada ? `${d.porTipo.entrada} del proveedor` : null,
+    d.porTipo.devolucion ? `${d.porTipo.devolucion} devueltas` : null,
+    d.porTipo.ajuste ? `${d.porTipo.ajuste} por conteo` : null,
+  ].filter(Boolean).join(' · ') || 'Todo lo de este día se revirtió';
+
+  const detalle = el('tr', { clase: 'fila-detalle', hidden: true }, [
+    el('td', { colspan: '5' }, [
+      el('div', { clase: 'desglose' }, [
+        tabla(['Hora', 'Producto', { t: 'Se sumó', num: true }, 'Cómo', 'Quién', { t: 'Quedaron', num: true }],
+          d.lineas.map((m) => el('tr', { estilo: m.revertida ? { opacity: '.5' } : {} }, [
+            el('td', { texto: horaPR(m.fechaISO) }),
+            el('td', { texto: m.productoNombre }),
+            el('td', { clase: 'num', texto: `+${m.delta}` }),
+            el('td', { texto: detalleSuma(m, nombreRest) }),
+            el('td', { texto: m.empleadoNombre }),
+            el('td', { clase: 'num', texto: String(m.existenciaDespues) }),
+          ]))),
+      ]),
+    ]),
+  ]);
+
+  const fila = el('tr', {
+    clase: 'fila-lote',
+    onclick: () => {
+      detalle.hidden = !detalle.hidden;
+      fila.classList.toggle('abierta', !detalle.hidden);
+    },
+  }, [
+    el('td', { texto: nombreDelDia(d.dia) }),
+    el('td', { clase: 'num', texto: String(d.unidades) }),
+    el('td', { clase: 'num', texto: String(d.productos) }),
+    el('td', {}, [
+      el('span', { texto: como }),
+      el('span', { clase: 'desc', estilo: { margin: '0', display: 'block' }, texto: 'tocar para ver' }),
+    ]),
+    el('td', { clase: 'num', texto: d.valor ? dinero(d.valor) : '—' }),
+  ]);
+  return [fila, detalle];
+}
+
+function detalleSuma(m, nombreRest) {
+  const partes = [COMO_SE_SUMO[m.tipo]];
+  // «Entrada de mercancía» es lo que se guarda cuando nadie escribió proveedor:
+  // repetirlo al lado de «Llegó del proveedor» no dice nada.
+  if (m.tipo === 'entrada' && m.motivo && m.motivo !== 'Entrada de mercancía') partes.push(m.motivo);
+  if (m.tipo === 'devolucion') partes.push(nombreRest(m.restauranteId));
+  if (m.tipo === 'ajuste') partes.push(`el sistema decía ${m.existenciaAntes}`);
+  if (m.revertida) partes.push('revertida, no cuenta');
+  return partes.join(' · ');
+}
+
+/* ------------------------------------------------------------------ */
+/* Ficha del producto: su historia completa                            */
+/* ------------------------------------------------------------------ */
+
+/* Todo lo que le pasó a un producto, del más nuevo al más viejo, con cuántas
+   quedaron después de cada cosa. Contesta «¿cuánto había el jueves?» y
+   «¿cuándo entró el último?» sin ir leyendo el Historial entero.
+
+   Sale de `existenciaDespues`, que cada movimiento guarda desde el primer día:
+   no se recalcula nada, se lee lo que quedó escrito en el momento. */
+async function modalFichaProducto(p) {
+  const [movs, revertidos, restaurantes] = await Promise.all([
+    DB.porIndice('movimientos', 'porProducto', p.id), lotesRevertidos(), DB.todos('restaurantes'),
+  ]);
+  const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
+  movs.sort((a, b) => (a.fechaISO < b.fechaISO ? 1 : -1));
+
+  const LIMITE = 60;
+  const cuerpo = el('div');
+  const pintar = (todos) => {
+    const lista = todos ? movs : movs.slice(0, LIMITE);
+    cuerpo.replaceChildren(...[
+      movs.length
+        ? tabla(['Fecha', 'Qué pasó', { t: 'Cambio', num: true }, { t: 'Quedaron', num: true }],
+          lista.map((m) => el('tr', { estilo: revertidos.has(m.loteId) ? { opacity: '.5' } : {} }, [
+            el('td', { texto: fechaHoraPR(m.fechaISO) }),
+            el('td', { texto: quePaso(m, nombreRest, revertidos) }),
+            el('td', {
+              clase: 'num',
+              texto: m.delta > 0 ? `+${m.delta}` : String(m.delta),
+              estilo: { color: m.delta > 0 ? 'var(--ok)' : (m.delta < 0 ? 'var(--critico)' : 'var(--texto-3)') },
+            }),
+            el('td', { clase: 'num', texto: String(m.existenciaDespues) }),
+          ])))
+        : el('p', { clase: 'vacio', texto: 'Este producto todavía no tiene movimientos.' }),
+      !todos && movs.length > LIMITE
+        ? el('button', {
+          clase: 'btn btn-chico btn-fantasma',
+          texto: `Ver los ${movs.length} movimientos`,
+          estilo: { marginTop: '12px' },
+          onclick: () => pintar(true),
+        })
+        : null,
+    ].filter(Boolean));
+  };
+  pintar(false);
+
+  abrirModal({
+    titulo: p.nombre,
+    subtitulo: `${p.tamano ? `${p.tamano} · ` : ''}Hay ${p.existencia} · Máximo ${p.par} · Mínimo ${p.puntoReorden}`,
+    contenido: cuerpo,
+    ancho: true,
+    botones: [
+      { texto: 'Cerrar', accion: cerrarModal },
+      { texto: 'Editar producto', clase: 'btn-primario', accion: () => { cerrarModal(); modalProducto(p); } },
+    ],
+  });
+}
+
+function quePaso(m, nombreRest, revertidos) {
+  let t;
+  if (m.tipo === 'entrada') {
+    t = ['Llegó del proveedor', m.motivo !== 'Entrada de mercancía' ? m.motivo : '', `recibió ${m.empleadoNombre}`]
+      .filter(Boolean).join(' · ');
+  } else if (m.tipo === 'salida') {
+    t = `Salió a ${nombreRest(m.restauranteId)} · ${m.empleadoNombre}`;
+  } else if (m.tipo === 'devolucion') {
+    t = `Devolvió ${nombreRest(m.restauranteId)} · ${m.motivo}`;
+  } else if (m.tipo === 'ajuste') {
+    t = m.delta === 0
+      ? `Conteo físico: coincide · ${m.empleadoNombre}`
+      : `Conteo físico: el sistema decía ${m.existenciaAntes} · ${m.motivo} · ${m.empleadoNombre}`;
+  } else if (m.tipo === 'reversion') {
+    t = `Corrección de un movimiento anterior · ${m.empleadoNombre}`;
+  } else {
+    t = TIPOS[m.tipo]?.etiqueta || m.tipo;
+  }
+  return revertidos.has(m.loteId) ? `${t} (revertido)` : t;
+}
+
+/* ------------------------------------------------------------------ */
 /* Conteo físico                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -721,20 +913,25 @@ async function vistaConteo() {
      hora buscando un descuadre que no existe — entraron 4 esta mañana y el
      conteo se hizo antes de registrarlos. Con la columna a la vista, eso se
      resuelve mirando. */
-  const entradasHoy = entradasPorProducto(await movimientosPeriodo(hoyOperativo, hoyOperativo));
+  const entradasHoy = entradasPorProducto(
+    await movimientosPeriodo(hoyOperativo, hoyOperativo), await lotesRevertidos(),
+  );
   const entroHoy = new Map(entradasHoy.map((e) => [e.clave, e.unidades]));
   const contados = new Map();
   const motivo = el('input', { type: 'text', maxlength: String(LARGO.motivo), placeholder: 'Conteo semanal, rotura, merma…' });
-  const resumen = el('p', { clase: 'desc', texto: 'Ningún producto tiene diferencia todavía.' });
+  const resumen = el('p', { clase: 'desc', texto: 'Todavía no has contado ningún producto.' });
+
+  const conDiferencia = () => [...contados.entries()].filter(([id, v]) => {
+    const p = productos.find((x) => x.id === id);
+    return p && v !== p.existencia;
+  }).length;
 
   const actualizar = () => {
-    const dif = [...contados.entries()].filter(([id, v]) => {
-      const p = productos.find((x) => x.id === id);
-      return p && v !== p.existencia;
-    });
-    resumen.textContent = dif.length
-      ? `${dif.length} ${dif.length === 1 ? 'producto tiene' : 'productos tienen'} diferencia con el sistema.`
-      : 'Ningún producto tiene diferencia todavía.';
+    const n = contados.size;
+    const dif = conDiferencia();
+    resumen.textContent = n
+      ? `${n} ${n === 1 ? 'contado' : 'contados'} · ${dif} con diferencia · ${n - dif} ${n - dif === 1 ? 'coincide' : 'coinciden'}.`
+      : 'Todavía no has contado ningún producto.';
   };
 
   const filas = productos.map((p) => {
@@ -745,7 +942,9 @@ async function vistaConteo() {
         const v = parseInt(entrada.value, 10);
         if (Number.isInteger(v) && v >= 0) contados.set(p.id, v); else contados.delete(p.id);
         const d = contados.has(p.id) ? contados.get(p.id) - p.existencia : 0;
-        celdaDif.textContent = contados.has(p.id) && d !== 0 ? (d > 0 ? `+${d}` : String(d)) : '—';
+        if (!contados.has(p.id)) celdaDif.textContent = '—';
+        else if (d === 0) celdaDif.textContent = 'coincide';
+        else celdaDif.textContent = d > 0 ? `+${d}` : String(d);
         celdaDif.style.color = d > 0 ? 'var(--ok)' : (d < 0 ? 'var(--critico)' : 'var(--texto-3)');
         actualizar();
       },
@@ -787,9 +986,11 @@ async function vistaConteo() {
 
   return el('div', {}, [
     seccion('Conteo físico',
-      'Escribe lo que de verdad hay. Solo se registran los productos donde escribas algo distinto a lo que dice el sistema. Los demás no se tocan.',
+      'Escribe lo que contaste en cada producto que cuentes, aunque coincida con el sistema: así queda anotado que '
+      + 'ese día se contó. Donde haya diferencia, el inventario se iguala a lo contado. Los que dejes en blanco no se '
+      + 'tocan ni se anotan.',
       resumen,
-      campo('Motivo del ajuste', motivo, 'Obligatorio. Queda en el historial junto a cada diferencia.'),
+      campo('Motivo', motivo, 'Obligatorio. Queda en el historial junto a cada producto contado.'),
       campo('Buscar', conBorrar(buscador), 'Lo que ya contaste no se pierde al buscar otro producto.'),
       sinResultados,
       tabla([
@@ -802,17 +1003,19 @@ async function vistaConteo() {
           clase: 'btn btn-primario',
           texto: 'Registrar el conteo',
           onclick: async () => {
-            if (!motivo.value.trim()) { brindis({ texto: 'Falta el motivo del ajuste', tipo: 'error' }); return; }
+            if (!motivo.value.trim()) { brindis({ texto: 'Falta el motivo', tipo: 'error' }); return; }
             const lineas = [...contados.entries()]
-              .filter(([id, v]) => {
-                const p = productos.find((x) => x.id === id);
-                return p && v !== p.existencia;
-              })
+              .filter(([id]) => productos.some((x) => x.id === id))
               .map(([productoId, nuevaExistencia]) => ({ productoId, nuevaExistencia, cantidad: 1 }));
-            if (!lineas.length) { brindis({ texto: 'No hay ninguna diferencia que registrar', tipo: 'error' }); return; }
+            if (!lineas.length) { brindis({ texto: 'No has contado ningún producto', tipo: 'error' }); return; }
+            const dif = conDiferencia();
+            const iguales = lineas.length - dif;
             if (!await confirmar({
               titulo: 'Registrar conteo físico',
-              mensaje: `Se van a ajustar ${lineas.length} productos. El inventario queda igual a lo contado y la diferencia se guarda en el historial a tu nombre.`,
+              mensaje: `Contaste ${lineas.length} ${lineas.length === 1 ? 'producto' : 'productos'}. `
+                + (dif ? `${dif} ${dif === 1 ? 'tiene' : 'tienen'} diferencia y el inventario se iguala a lo contado. ` : '')
+                + (iguales ? `${iguales} ${iguales === 1 ? 'coincide' : 'coinciden'} con el sistema y ${iguales === 1 ? 'queda anotado' : 'quedan anotados'} como contados. ` : '')
+                + 'Todo queda en el historial a tu nombre.',
               textoSi: 'Registrar',
             })) return;
             try {
@@ -822,9 +1025,14 @@ async function vistaConteo() {
                 empleadoId: ctx.gerente.id,
                 empleadoNombre: ctx.gerente.nombre,
                 motivo: motivo.value.trim(),
+                incluirSinDiferencia: true,
               });
               await ctx.refrescarCache();
-              brindis({ texto: 'Conteo registrado', sub: `${lineas.length} productos ajustados`, tipo: 'exito' });
+              brindis({
+                texto: 'Conteo registrado',
+                sub: `${lineas.length} ${lineas.length === 1 ? 'contado' : 'contados'} · ${dif} ${dif === 1 ? 'ajustado' : 'ajustados'}`,
+                tipo: 'exito',
+              });
               render();
             } catch (e) {
               brindis({ texto: 'No se registró', sub: e.message, tipo: 'error', segundos: 8 });
@@ -1122,7 +1330,7 @@ async function vistaReportes() {
   const rest = porRestaurante(movs);
   const emp = porEmpleado(movs);
   const prod = porProducto(movs);
-  const entradas = entradasPorProducto(movs);
+  const entradas = entradasPorProducto(movs, await lotesRevertidos());
   const totalUnidades = rest.reduce((s, r) => s + r.unidades, 0);
   const totalValor = rest.reduce((s, r) => s + r.valor, 0);
 
@@ -1340,16 +1548,31 @@ async function vistaHistorial() {
    hace ese botón. Al tocarla se abre el desglose. */
 function filaLote(g, nombreRest) {
   const botellas = g.lineas.reduce((s, m) => s + Math.abs(m.delta), 0);
+  /* Un conteo no se lee en «botellas»: desde que también guarda lo que
+     coincidió, uno de ciento treinta productos sin una sola diferencia diría
+     «0 botellas». Se dice cuántos se contaron y cuántos tenían diferencia, y el
+     desglose muestra lo que decía el sistema contra lo contado. */
+  const esConteo = g.tipo === 'ajuste';
+  const conDif = esConteo ? g.lineas.filter((m) => m.delta !== 0).length : 0;
+  const desglose = esConteo
+    ? tabla(['Producto', { t: 'Decía el sistema', num: true }, { t: 'Contado', num: true }, { t: 'Diferencia', num: true }],
+      g.lineas.map((m) => el('tr', {}, [
+        el('td', { texto: m.productoNombre }),
+        el('td', { clase: 'num', texto: String(m.existenciaAntes) }),
+        el('td', { clase: 'num', texto: String(m.existenciaDespues) }),
+        el('td', {
+          clase: 'num',
+          texto: m.delta === 0 ? 'coincide' : (m.delta > 0 ? `+${m.delta}` : String(m.delta)),
+          estilo: { color: m.delta > 0 ? 'var(--ok)' : (m.delta < 0 ? 'var(--critico)' : 'var(--texto-3)') },
+        }),
+      ])))
+    : tabla(['Producto', { t: 'Cambio', num: true }],
+      g.lineas.map((m) => el('tr', {}, [
+        el('td', { texto: m.productoNombre }),
+        el('td', { clase: 'num', texto: m.delta > 0 ? `+${m.delta}` : String(m.delta) }),
+      ])));
   const detalle = el('tr', { clase: 'fila-detalle', hidden: true }, [
-    el('td', { colspan: '7' }, [
-      el('div', { clase: 'desglose' }, [
-        tabla(['Producto', { t: 'Cambio', num: true }],
-          g.lineas.map((m) => el('tr', {}, [
-            el('td', { texto: m.productoNombre }),
-            el('td', { clase: 'num', texto: m.delta > 0 ? `+${m.delta}` : String(m.delta) }),
-          ]))),
-      ]),
-    ]),
+    el('td', { colspan: '7' }, [el('div', { clase: 'desglose' }, [desglose])]),
   ]);
 
   const fila = el('tr', {
@@ -1382,14 +1605,23 @@ function filaLote(g, nombreRest) {
     ].filter(Boolean)),
     el('td', { texto: g.empleadoNombre }),
     el('td', { texto: g.restauranteId ? nombreRest(g.restauranteId) : '—' }),
-    el('td', {}, [
-      el('span', { clase: 'resumen-lote', texto: `${botellas} ${botellas === 1 ? 'botella' : 'botellas'}` }),
-      el('span', {
-        clase: 'desc',
-        estilo: { margin: '0' },
-        texto: `${g.lineas.length} ${g.lineas.length === 1 ? 'producto' : 'productos'} · tocar para ver`,
-      }),
-    ]),
+    el('td', {}, esConteo
+      ? [
+        el('span', { clase: 'resumen-lote', texto: `${g.lineas.length} ${g.lineas.length === 1 ? 'contado' : 'contados'}` }),
+        el('span', {
+          clase: 'desc',
+          estilo: { margin: '0' },
+          texto: `${conDif} con diferencia · tocar para ver`,
+        }),
+      ]
+      : [
+        el('span', { clase: 'resumen-lote', texto: `${botellas} ${botellas === 1 ? 'botella' : 'botellas'}` }),
+        el('span', {
+          clase: 'desc',
+          estilo: { margin: '0' },
+          texto: `${g.lineas.length} ${g.lineas.length === 1 ? 'producto' : 'productos'} · tocar para ver`,
+        }),
+      ]),
     el('td', { texto: [g.motivo, g.autorizadoPor ? `Autorizó ${g.autorizadoPor}` : ''].filter(Boolean).join(' · ') || '—' }),
     el('td', { clase: 'num' }, [
       g.tipo === 'reversion' ? null : el('button', {

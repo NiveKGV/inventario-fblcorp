@@ -228,6 +228,35 @@ déjalos vacíos**: queda «sin tope» y no vuelve a avisar (punto 4).
 
 Aunque no haya nada bajo el máximo, la pantalla deja recibir igual.
 
+### El registro de lo que entró, día por día
+
+**Administración → Entradas** tiene un renglón por cada día en que subió el
+inventario: el jueves que llegó la orden, el viernes que entró otra caja, el día
+que una barra devolvió algo. Cada renglón dice cuántas botellas, cuántos
+productos, cómo entraron y cuánto valen a costo.
+
+**Toca un día** y se abre lo que entró ese día, producto por producto: la hora,
+cuánto se sumó, de dónde (el proveedor o la factura que escribiste, la barra que
+devolvió, o el conteo que encontró de más), quién lo registró y cuántas quedaron
+después.
+
+Arriba se escoge el período: hoy, ayer, los últimos 7, 30 o 90 días, o el mes.
+
+Si una orden se registró por error y se revirtió, sigue saliendo en su día pero
+marcada como **revertida**, más clara, y no suma. Así nadie piensa que nunca se
+registró.
+
+### La historia de cada producto
+
+En **Administración → Inventario**, **toca cualquier producto** y se abre su
+ficha: todo lo que le ha pasado, del más nuevo al más viejo. Cuándo llegó y con
+qué factura, cuándo salió y a qué barra, cuándo se contó, y **cuántas quedaban
+después de cada cosa**. Sirve para contestar «¿cuánto había el jueves?» o
+«¿cuándo fue la última vez que entró?» sin leer el historial entero.
+
+Desde la ficha, **Editar producto** abre el editor de siempre. El botón
+**Editar** de la última columna sigue yendo directo.
+
 ---
 
 ## 7. El conteo físico
@@ -238,10 +267,22 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
 2. Cuenta las botellas de verdad y escribe el número en la columna **Contado**.
    Cuenta antes de abrir y no en medio del servicio, y ve por estante y no
    siguiendo la lista: siguiendo la lista se salta lo que no está donde debería.
-3. Solo escribe donde haya diferencia. Lo que no toques, no se cambia.
-4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar**.
+3. **Escribe el número en cada producto que cuentes, aunque coincida** con lo
+   que dice el sistema. La columna Diferencia dice «coincide» o cuánto falta o
+   sobra. Lo que dejes en blanco no se toca ni se anota.
+4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar el
+   conteo**.
 
-La diferencia queda guardada con tu nombre. Nada se borra nunca.
+Donde hay diferencia, el inventario se iguala a lo contado. Donde coincide, no
+se mueve nada, pero **queda anotado que ese día se contó**. Todo queda en el
+Historial con tu nombre: el renglón del conteo dice cuántos productos se
+contaron y cuántos tenían diferencia, y al tocarlo sale lo que decía el sistema
+contra lo contado. Nada se borra nunca.
+
+**El conteo no es para meter lo que llega.** La mercancía nueva se registra en
+**Recibir la orden** (punto 6). Si se mete por el conteo, queda como una
+corrección y no como mercancía recibida: sin proveedor, sin factura, y en el
+registro de Entradas sale como «conteo» y no como «llegó del proveedor».
 
 **El buscador del conteo** filtra por nombre o por categoría («mezcal» trae
 todos los mezcales), sin importar las tildes. Lo que ya escribiste en un

@@ -320,6 +320,30 @@ la consulta salía vacía y la prueba reventaba en `[0].unidades`. Corregido a
 `diaOperativo(new Date(), 5)`. Cualquier prueba que consulte movimientos por
 fecha tiene que usar el día operativo, nunca la fecha del calendario.
 
+### Entradas por día, ficha del producto y conteos que coinciden (sept 2026)
+
+El cliente pidió «un registro de cada vez que se suma inventario, que se toque
+y muestre lo que se añadió ese día». Tres piezas:
+
+- **Pestaña Entradas** (`vistaEntradas`, `sumasPorDia` en `modelo.js`): un
+  renglón por día operativo con todo lo que subió la existencia — entradas,
+  devoluciones y ajustes positivos, separados en `porTipo` porque solo el
+  primero se le compró a alguien. Lo revertido se muestra marcado y no suma.
+- **Ficha del producto** (`modalFichaProducto`): tocar un renglón del
+  Inventario abre la historia completa del producto, leída de
+  `existenciaDespues`. Antes ese toque abría el editor; ahora el editor está en
+  la ficha y en el botón Editar.
+- **El conteo guarda lo que coincidió** (`incluirSinDiferencia` en
+  `registrarLote`): un ajuste de delta 0 marcado `sinDiferencia`. Sin eso no
+  había forma de saber si un producto se contó o se saltó. No mueve existencia
+  ni consumo. Solo el conteo físico pasa la opción; la importación del catálogo
+  y cualquier otro ajuste siguen descartando las líneas sin cambio.
+
+De paso: `entradasPorProducto` contaba las órdenes revertidas, porque la
+reversión es de tipo `reversion` y no se restaba. Ahora recibe
+`lotesRevertidos()`, que consulta la base (no el período: la reversión puede
+caer otro día).
+
 ### Prepa es un local más, sin caso especial
 
 La cocina de preparación consume licor igual que una barra y entró como un
