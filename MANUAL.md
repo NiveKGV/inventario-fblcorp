@@ -225,7 +225,7 @@ Esta pantalla tiene **dos partes** y conviene no confundirlas:
 
 Para recibir:
 
-1. **Administración → Lista de compra**, y baja a *Recibir lo que llegó*.
+1. **Administración → Lista de compra**, y baja a *Recibir mercancía*.
 2. La tabla viene con lo que el sistema sugirió ordenar. **Corrige la columna
    «Llegaron»** con lo que dice la factura, botella por botella. Lo que no
    llegó, déjalo en 0 o toca **Quitar** en ese renglón.
@@ -281,8 +281,9 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
    Cuenta antes de abrir y no en medio del servicio, y ve por estante y no
    siguiendo la lista: siguiendo la lista se salta lo que no está donde debería.
 3. **Escribe el número en cada producto que cuentes, aunque coincida** con lo
-   que dice el sistema. La columna Diferencia dice «coincide» o cuánto falta o
-   sobra. Lo que dejes en blanco no se toca ni se anota.
+   que dice el sistema. El encasillado está vacío: lo que escribas ahí es lo
+   que contaste. La columna Diferencia dice «coincide» o cuánto falta o sobra.
+   Lo que dejes en blanco no se toca ni se anota.
 4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar el
    conteo**.
 
@@ -293,7 +294,7 @@ contaron y cuántos tenían diferencia, y al tocarlo sale lo que decía el siste
 contra lo contado. Nada se borra nunca.
 
 **El conteo no es para meter lo que llega.** La mercancía nueva se registra en
-**Recibir la orden** (punto 6). Si se mete por el conteo, queda como una
+**Recibir mercancía** (punto 6). Si se mete por el conteo, queda como una
 corrección y no como mercancía recibida: sin proveedor, sin factura, y en el
 registro de Entradas sale como «conteo» y no como «llegó del proveedor».
 
@@ -302,9 +303,27 @@ todos los mezcales), sin importar las tildes. Lo que ya escribiste en un
 producto **no se pierde** al buscar otro: puedes buscar, contar, buscar el
 siguiente, y al final registrar todo junto.
 
-**Para ir más rápido:** después de escribir una cantidad, la tecla **intro** del
-teclado salta sola al próximo producto, sin tener que tocar la pantalla. Si
-estás filtrando con el buscador, salta solo entre los que se ven.
+**La tecla intro cierra el teclado y no salta a ningún producto.** El próximo de
+la lista no es el próximo del estante: se cuenta por estante y se busca cada
+uno. (En *Recibir mercancía* sí salta al siguiente, porque ahí se va bajando
+por la factura.)
+
+### Si se te interrumpe el conteo
+
+**Lo que llevas escrito no se pierde.** Se guarda en el iPad según lo escribes.
+Si te llaman, si bloqueas la pantalla, si sales de la app o si se cierra la
+sesión sola, al volver **entras tu código** —eso no cambia— y arriba del conteo
+aparece una banda: *«Hay un conteo a medias: 12 productos escritos»*, con dos
+botones, **Seguir con ese conteo** y **Descartar**.
+
+Nada se ha registrado hasta que toques *Registrar el conteo*. El borrador
+caduca al terminar el día operativo: un conteo de ayer no se retoma hoy, porque
+compararía contra existencias que ya cambiaron.
+
+**Al personal le pasa lo mismo con lo que escogen.** Si un empleado tiene seis
+licores en la lista y se le cierra la sesión, al volver a entrar con su código
+los encuentra ahí, con un aviso. Cada quien recupera lo suyo: el que entra
+después no hereda la selección de otro.
 
 **Si ese día entró mercancía**, aparece una columna **«Entró hoy»** con lo que
 llegó de cada producto. Está para evitar el susto de siempre: se cuentan 12,

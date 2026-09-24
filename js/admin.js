@@ -23,6 +23,9 @@ import {
   brindis, dinero, numero, descargar, aCSV, normalizar, conBorrar,
 } from './ui.js';
 import { interpretar as interpretarCatalogo, aplicar as aplicarCatalogo } from './importar.js';
+import {
+  guardarBorrador, leerBorrador, borrarBorrador, conEspera, CLAVE_CONTEO,
+} from './borradores.js';
 
 /* Topes de longitud. No son cosmética: la lista de compra tiene botón de
    imprimir, y un nombre de producto sin límite se convierte en papel saliendo
@@ -595,6 +598,10 @@ async function vistaCompra() {
   const filas = new Map(lista.map((p) => [p.id, { producto: p, cantidad: p.aOrdenar, sugerido: p.aOrdenar }]));
 
   const contenedorTabla = el('div');
+  /* Los encasillados de cantidad, por producto: la tabla se vuelve a dibujar
+     entera cada vez que se añade o se quita un renglón, así que hay que poder
+     encontrar el que acaba de nacer. */
+  const entradasCantidad = new Map();
   const buscador = el('input', {
     type: 'search', placeholder: 'Escribe el nombre del licor…',
     autocomplete: 'off', autocorrect: 'off', autocapitalize: 'none', spellcheck: 'false',
@@ -615,6 +622,7 @@ async function vistaCompra() {
               filas.get(p.id).cantidad = Math.max(0, parseInt(entrada.value, 10) || 0);
             },
           });
+          entradasCantidad.set(p.id, entrada);
           return el('tr', {}, [
             el('td', { texto: p.nombre }),
             el('td', {}, [etiquetaEstado(estadoStock(p))]),
@@ -648,6 +656,17 @@ async function vistaCompra() {
           buscador.value = '';
           resultados.replaceChildren();
           pintarTabla();
+          /* El cursor cae en la cantidad del renglón recién añadido, con el
+             teclado abierto: quien acaba de escoger el producto lo siguiente
+             que quiere es escribir cuántas llegaron, no bajar a buscarlo. Va
+             dentro del toque, que es lo que iOS exige para abrir el teclado
+             por código. */
+          const nueva = entradasCantidad.get(p.id);
+          if (nueva) {
+            nueva.scrollIntoView({ block: 'center' });
+            nueva.focus();
+            nueva.select();
+          }
         },
       }))
       : [el('p', { clase: 'ayuda', texto: 'Ningún producto con ese nombre.' })]));
@@ -669,7 +688,7 @@ async function vistaCompra() {
         el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Imprimir', onclick: () => window.print() }),
       ]) : null),
 
-    seccion('Recibir lo que llegó',
+    seccion('Recibir mercancía',
       'Aquí se entra la mercancía con la factura delante: en la columna Llegaron escribe cuántas botellas entraron de verdad, '
       + 'no lo que se pidió. La tabla viene con lo que el sistema sugirió ordenar, así que corrige cada número; lo que no '
       + 'llegó, déjalo en 0 o quita el renglón. Al almacén entra solamente lo que escribas en esa columna.',
@@ -912,6 +931,7 @@ function quePaso(m, nombreRest, revertidos) {
 
 async function vistaConteo() {
   const [productos, categorias] = await Promise.all([productosActivos(), DB.todos('categorias')]);
+  let borrador = await leerBorrador(CLAVE_CONTEO);
   /* Lo que entró hoy, para tenerlo delante mientras se cuenta. La escena es
      ésta: se cuentan 12, el sistema dice 8, y alguien se va a pasar media
      hora buscando un descuadre que no existe — entraron 4 esta mañana y el
@@ -938,9 +958,28 @@ async function vistaConteo() {
       : 'Todavía no has contado ningún producto.';
   };
 
+  /* Se guarda lo escrito según se escribe. No es la sesión: al volver hay que
+     entrar el código igual. Es el trabajo, que antes se perdía por irse a
+     mirar otra pestaña o por los dos minutos de inactividad. */
+  const apuntarBorrador = conEspera(() => {
+    if (!contados.size && !motivo.value.trim()) { borrarBorrador(CLAVE_CONTEO); return; }
+    guardarBorrador(CLAVE_CONTEO, {
+      gerente: ctx?.gerente?.nombre || '',
+      motivo: motivo.value.trim(),
+      contados: Object.fromEntries(contados),
+    });
+  });
+  motivo.oninput = apuntarBorrador;
+
+  const entradas = new Map();
   const filas = productos.map((p) => {
+    /* Sin número de ejemplo dentro del encasillado: lo que el sistema cree que
+       hay ya está en la columna de al lado, y repetirlo aquí en gris hacía
+       creer que el conteo venía contestado. `data-sin-salto` es lo que impide
+       que el intro se vaya al próximo producto. */
     const entrada = el('input', {
-      type: 'number', min: '0', step: '1', placeholder: String(p.existencia),
+      type: 'number', min: '0', step: '1',
+      'data-sin-salto': true,
       estilo: { width: '100px', minHeight: '48px', textAlign: 'right' },
       oninput: () => {
         const v = parseInt(entrada.value, 10);
@@ -951,8 +990,10 @@ async function vistaConteo() {
         else celdaDif.textContent = d > 0 ? `+${d}` : String(d);
         celdaDif.style.color = d > 0 ? 'var(--ok)' : (d < 0 ? 'var(--critico)' : 'var(--texto-3)');
         actualizar();
+        apuntarBorrador();
       },
     });
+    entradas.set(p.id, entrada);
     const celdaDif = el('td', { clase: 'num', texto: '—', estilo: { color: 'var(--texto-3)' } });
     return el('tr', {
       datos: { busqueda: normalizar(`${p.nombre} ${nombreDeCategoria(categorias, p.categoriaId)} ${p.tamano || ''}`) },
@@ -988,7 +1029,55 @@ async function vistaConteo() {
     sinResultados.hidden = visibles > 0;
   };
 
+  /* Retomar no aplica nada solo: si entró otra persona, o si el conteo de la
+     mañana ya no tiene sentido, se descarta. Por eso es una banda con dos
+     botones y no una restauración silenciosa. */
+  const banda = el('div', { clase: 'aviso-banda', hidden: true });
+  const pintarBanda = () => {
+    const hay = borrador && Object.keys(borrador.contados || {}).length;
+    banda.hidden = !hay;
+    if (!hay) return;
+    const cuantos = Object.keys(borrador.contados).length;
+    const minutos = Math.max(1, Math.round((Date.now() - new Date(borrador.fechaISO)) / 60000));
+    banda.replaceChildren(
+      el('div', { clase: 'crece' }, [
+        el('b', { texto: `Hay un conteo a medias: ${cuantos} ${cuantos === 1 ? 'producto escrito' : 'productos escritos'}` }),
+        el('span', {
+          texto: `Se dejó hace ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`
+            + `${borrador.gerente ? `, por ${borrador.gerente}` : ''}. Nada se ha registrado todavía.`,
+        }),
+      ]),
+      el('button', {
+        clase: 'btn btn-chico',
+        texto: 'Seguir con ese conteo',
+        onclick: () => {
+          for (const [id, v] of Object.entries(borrador.contados)) {
+            const entrada = entradas.get(id);
+            if (!entrada) continue;
+            entrada.value = String(v);
+            entrada.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          if (borrador.motivo) motivo.value = borrador.motivo;
+          borrador = null;
+          pintarBanda();
+          brindis({ texto: 'Conteo recuperado', sub: 'Sigue donde ibas.', tipo: 'exito' });
+        },
+      }),
+      el('button', {
+        clase: 'btn btn-chico btn-fantasma',
+        texto: 'Descartar',
+        onclick: async () => {
+          await borrarBorrador(CLAVE_CONTEO);
+          borrador = null;
+          pintarBanda();
+        },
+      }),
+    );
+  };
+  pintarBanda();
+
   return el('div', {}, [
+    banda,
     seccion('Conteo físico',
       'Escribe lo que contaste en cada producto que cuentes, aunque coincida con el sistema: así queda anotado que '
       + 'ese día se contó. Donde haya diferencia, el inventario se iguala a lo contado. Los que dejes en blanco no se '
@@ -1031,6 +1120,7 @@ async function vistaConteo() {
                 motivo: motivo.value.trim(),
                 incluirSinDiferencia: true,
               });
+              await borrarBorrador(CLAVE_CONTEO);
               await ctx.refrescarCache();
               brindis({
                 texto: 'Conteo registrado',

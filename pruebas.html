@@ -884,6 +884,42 @@ igual([consumoPrepa.length, consumoPrepa[0].clave, consumoPrepa[0].unidades], [1
   'El consumo se le carga a Prepa, no a la barra del empleado');
 
 /* ------------------------------------------------------------------ */
+seccion('Borradores de lo que quedó a medias');
+
+const B = await import('./js/borradores.js');
+
+await B.guardarBorrador('borrador_prueba', { contados: { p1: 3 }, motivo: 'Conteo del jueves' });
+const leido = await B.leerBorrador('borrador_prueba');
+igual([leido.contados.p1, leido.motivo], [3, 'Conteo del jueves'],
+  'Un borrador se guarda y se lee tal cual');
+igual(leido.dia, hoy, 'El borrador queda fechado con el día operativo, no con la fecha del calendario');
+anotar(!!leido.fechaISO, 'Guarda el momento exacto, para poder decir «de hace 12 minutos»');
+
+/* Un conteo de ayer retomado hoy compararía contra existencias que ya
+   cambiaron: caduca solo y se borra al pasar, sin dejar restos. */
+await DB.escribirConfig('borrador_prueba', { ...leido, dia: M.sumarDias(hoy, -1) });
+igual(await B.leerBorrador('borrador_prueba'), null, 'Un borrador de ayer no se devuelve');
+igual(await DB.leerConfig('borrador_prueba', null), null, 'Y se borra al detectarlo, no se queda colgando');
+
+await B.guardarBorrador('borrador_prueba', { lineas: { p1: 2 } });
+await B.borrarBorrador('borrador_prueba');
+igual(await B.leerBorrador('borrador_prueba'), null, 'Descartar un borrador lo deja vacío');
+igual(await B.leerBorrador('borrador_que_nunca_existio'), null, 'Pedir uno que no existe no revienta');
+
+igual(B.claveCarrito('e1'), 'borrador_carrito_e1', 'Cada empleado tiene su propia clave de borrador');
+anotar(B.claveCarrito('e1') !== B.claveCarrito('e2'),
+  'El que entra después no hereda lo que escogió otro');
+
+/* El guardado espera a que la persona pare de escribir: guardar en cada tecla
+   escribiría en la base decenas de veces por producto. */
+let veces = 0;
+const conta = B.conEspera(() => { veces += 1; }, 40);
+conta(); conta(); conta();
+igual(veces, 0, 'Mientras se escribe no se guarda todavía');
+await new Promise((r) => setTimeout(r, 90));
+igual(veces, 1, 'Al parar, se guarda una sola vez');
+
+/* ------------------------------------------------------------------ */
 
 const total = document.getElementById('total');
 total.textContent = fallidas === 0

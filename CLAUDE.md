@@ -320,6 +320,39 @@ la consulta salía vacía y la prueba reventaba en `[0].unidades`. Corregido a
 `diaOperativo(new Date(), 5)`. Cualquier prueba que consulte movimientos por
 fecha tiene que usar el día operativo, nunca la fecha del calendario.
 
+### Borradores de lo que quedó a medias (sept 2026)
+
+Un conteo de ciento treinta botellas y el carrito de un empleado vivían solo en
+la pantalla. Irse a otra pestaña, salir de la app, bloquear el iPad o los dos
+minutos de inactividad borraban el trabajo sin aviso. Pasó en el almacén, con el
+conteo a medias.
+
+`js/borradores.js` guarda lo escrito en `config`, con debounce, y caduca al
+terminar el día operativo (retomar el conteo de ayer compararía contra
+existencias que ya cambiaron).
+
+Lo que NO hace, y es la línea que no se cruza: **no guarda la sesión.** Al
+volver hay que entrar el código igual. Se recupera lo escrito, no el permiso.
+
+- Conteo: una banda con «Seguir con ese conteo / Descartar». No se restaura
+  solo, porque quien entra puede ser otra persona.
+- Carrito: se restaura solo, con aviso, y **por empleado** (`borrador_carrito_<id>`):
+  el que entra después no hereda lo que escogió otro.
+- Ambos se borran al registrar. Un borrador no es un movimiento y no toca
+  existencia: nada existe hasta que alguien toca Registrar.
+
+Si se añade otro módulo como éste, **hay que meterlo en `ARCHIVOS` de `sw.js`**
+o la app deja de abrir sin internet.
+
+### El intro no salta en todas las pantallas
+
+`data-sin-salto` en un campo hace que `siguienteCampo` devuelva null: el intro
+cierra el teclado y no escoge nada. Está en el conteo físico, donde el próximo
+de la lista no es el próximo del estante. En «Recibir mercancía» el salto se
+queda, porque ahí se baja por la factura renglón por renglón. La tecla del iPad
+dice «Listo» en vez de «Siguiente» desde que se crea el campo: prometer un salto
+que no ocurre es peor que no prometer nada.
+
 ### Entradas por día, ficha del producto y conteos que coinciden (sept 2026)
 
 El cliente pidió «un registro de cada vez que se suma inventario, que se toque

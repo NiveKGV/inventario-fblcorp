@@ -30,8 +30,12 @@ function el(etiqueta, props = {}, hijos = []) {
      para no depender de un evento. Las contraseñas y los códigos de acceso
      quedan fuera: ahí Enter tiene una acción propia. */
   if (etiqueta === 'input' && props.enterkeyhint == null) {
-    if (props.type === 'number') nodo.setAttribute('enterkeyhint', 'next');
-    else if (props.type === 'search') nodo.setAttribute('enterkeyhint', 'done');
+    // Un campo marcado `data-sin-salto` nunca lleva a otro, así que su tecla
+    // dice "Listo" desde el principio: prometer "Siguiente" y no saltar es
+    // peor que no prometer nada.
+    if (props.type === 'number') {
+      nodo.setAttribute('enterkeyhint', nodo.dataset.sinSalto !== undefined ? 'done' : 'next');
+    } else if (props.type === 'search') nodo.setAttribute('enterkeyhint', 'done');
   }
 
   for (const h of [].concat(hijos)) {
@@ -336,6 +340,12 @@ function esCampoNavegable(n) {
    Se descartan los ocultos porque las tablas se filtran con el buscador: saltar
    a un campo que no está a la vista deja a la persona escribiendo a ciegas. */
 function siguienteCampo(actual) {
+  /* Hay pantallas donde saltar al próximo campo está mal. El conteo físico es
+     una: el que sigue en la lista no es el que sigue en el estante, y el salto
+     dejaba el teclado apuntando a un producto que nadie estaba mirando. Ahí el
+     intro solo cierra el teclado y no escoge nada. Donde sí se va renglón por
+     renglón —recibir mercancía con la factura delante— el salto se queda. */
+  if (actual.dataset.sinSalto !== undefined) return null;
   const grupo = actual.closest('#modal, .modal, #admin-cuerpo, .pantalla.activa') || document;
   const campos = [...grupo.querySelectorAll(CAMPOS)]
     .filter((c) => !c.disabled && !c.readOnly && c.offsetParent !== null);

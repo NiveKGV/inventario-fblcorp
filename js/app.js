@@ -27,6 +27,9 @@ import {
   marcarHojaDelSistema, hojaDelSistemaAbierta,
 } from './ui.js';
 import { abrirAdmin, salirAdmin } from './admin.js';
+import {
+  guardarBorrador, leerBorrador, borrarBorrador, conEspera, claveCarrito,
+} from './borradores.js';
 
 /* Dos minutos parejo para todos, empleados y gerencia. El cierre automático
    existe para que nadie saque licor a nombre de otro porque el anterior dejó
@@ -502,6 +505,23 @@ async function abrirPanel(empleado, restaurante, { elegido = false } = {}) {
     (c) => estado.productos.some((p) => p.categoriaId === c.id),
   )?.id || null;
 
+  /* Se recupera lo que esta misma persona había escogido y no llegó a
+     registrar. Se filtra contra el catálogo de ahora: un producto dado de baja
+     mientras tanto no vuelve del borrador. Si no queda nada que recuperar, el
+     borrador se borra para no dejarlo colgando. */
+  const claveSuya = claveCarrito(empleado.id);
+  const guardado = await leerBorrador(claveSuya);
+  let recuperadas = 0;
+  if (guardado?.lineas) {
+    for (const [id, cant] of Object.entries(guardado.lineas)) {
+      const p = estado.productos.find((x) => x.id === id);
+      if (!p || !(cant > 0)) continue;
+      estado.carrito.set(id, cant);
+      recuperadas += cant;
+    }
+    if (!recuperadas) await borrarBorrador(claveSuya);
+  }
+
   document.documentElement.style.setProperty('--acento', restaurante.color);
   $('#panel-titulo').textContent = restaurante.nombre;
   $('#panel-sub').textContent = empleado.nombre;
@@ -533,6 +553,14 @@ async function abrirPanel(empleado, restaurante, { elegido = false } = {}) {
   pintarCarrito();
   mostrarPantalla('panel');
   iniciarSesion(INACTIVIDAD_EMPLEADO, '#sesion-aviso');
+
+  if (recuperadas) {
+    brindis({
+      texto: `Recuperamos lo que tenías escogido: ${recuperadas} ${recuperadas === 1 ? 'botella' : 'botellas'}`,
+      sub: 'Todavía no se ha registrado nada. Revisa la lista y confirma, o toca Vaciar.',
+      segundos: 8,
+    });
+  }
 }
 
 function buscando() { return estado.busqueda.length > 0; }
@@ -669,6 +697,25 @@ function abrirSelectorCantidad(producto) {
   });
 }
 
+/* Lo que el empleado lleva escogido se guarda según lo toca, con su nombre
+   colgado del código. Antes, salir de la app a contestar un mensaje —o los dos
+   minutos de inactividad— borraban seis licores ya seleccionados y había que
+   empezar otra vez, de pie en el almacén.
+
+   Se guarda por empleado: el que vuelve encuentra lo suyo, y el que entra
+   después no hereda la selección de otro. Nada de esto mueve inventario; sigue
+   sin existir hasta que alguien toca Confirmar. */
+const apuntarCarrito = conEspera(() => {
+  if (!estado.empleado) return;
+  const clave = claveCarrito(estado.empleado.id);
+  if (!estado.carrito.size) { borrarBorrador(clave); return; }
+  guardarBorrador(clave, {
+    empleadoNombre: estado.empleado.nombre,
+    restauranteId: estado.restaurante?.id || null,
+    lineas: Object.fromEntries(estado.carrito),
+  });
+}, 400);
+
 function pintarCarrito() {
   const lista = $('#carrito-lista');
   const entradas = [...estado.carrito.entries()];
@@ -694,6 +741,7 @@ function pintarCarrito() {
       ]);
     }));
   }
+  if (estado.empleado) apuntarCarrito();
   const total = entradas.reduce((s, [, c]) => s + c, 0);
   $('#carrito-total').textContent = numero(total);
   $('#btn-confirmar').disabled = total === 0;
@@ -784,6 +832,9 @@ async function confirmarSalida() {
       permitirNegativo: Boolean(autorizadoPor),
       autorizadoPor,
     });
+
+    // Registrado: el borrador ya no representa nada pendiente.
+    await borrarBorrador(claveCarrito(estado.empleado.id));
 
     const total = lineas.reduce((s, l) => s + l.cantidad, 0);
     // Se capturan ANTES de volver a la pantalla de acceso, que limpia la sesión.
