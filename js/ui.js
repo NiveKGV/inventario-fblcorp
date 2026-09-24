@@ -340,11 +340,18 @@ function esCampoNavegable(n) {
    Se descartan los ocultos porque las tablas se filtran con el buscador: saltar
    a un campo que no está a la vista deja a la persona escribiendo a ciegas. */
 function siguienteCampo(actual) {
-  /* Hay pantallas donde saltar al próximo campo está mal. El conteo físico es
-     una: el que sigue en la lista no es el que sigue en el estante, y el salto
-     dejaba el teclado apuntando a un producto que nadie estaba mirando. Ahí el
-     intro solo cierra el teclado y no escoge nada. Donde sí se va renglón por
-     renglón —recibir mercancía con la factura delante— el salto se queda. */
+  /* En las tablas de cantidades el intro no salta a ningún lado: cierra el
+     teclado y no escoge nada.
+
+     Empezó por el conteo físico —el que sigue en la lista no es el que sigue en
+     el estante— y terminó aplicando a todas, por lo mismo que pasaba al final
+     de la tabla de recibir mercancía: el salto aterrizaba en el campo del
+     proveedor, que no es donde nadie iba. Escribir una cantidad y que el
+     teclado se mude solo a otro sitio es peor que no moverse.
+
+     El salto se queda en los formularios de verdad —el editor de un producto,
+     donde se llenan máximo, mínimo y costo uno tras otro—, que es para lo que
+     se hizo. */
   if (actual.dataset.sinSalto !== undefined) return null;
   const grupo = actual.closest('#modal, .modal, #admin-cuerpo, .pantalla.activa') || document;
   const campos = [...grupo.querySelectorAll(CAMPOS)]

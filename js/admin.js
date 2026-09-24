@@ -617,6 +617,7 @@ async function vistaCompra() {
         items.map(({ producto: p, cantidad, sugerido }) => {
           const entrada = el('input', {
             type: 'number', min: '0', step: '1', value: String(cantidad),
+            'data-sin-salto': true,
             estilo: { width: '92px', minHeight: '48px', textAlign: 'right' },
             oninput: () => {
               filas.get(p.id).cantidad = Math.max(0, parseInt(entrada.value, 10) || 0);
@@ -1161,6 +1162,7 @@ async function vistaDevolucion() {
       lista.map((p) => {
         const entrada = el('input', {
           type: 'number', min: '0', step: '1', value: String(cantidades.get(p.id) || ''),
+          'data-sin-salto': true,
           estilo: { width: '100px', minHeight: '48px', textAlign: 'right' },
           oninput: () => {
             const v = parseInt(entrada.value, 10);
@@ -1264,6 +1266,7 @@ async function vistaSalidaManual() {
         const entrada = el('input', {
           type: 'number', min: '0', step: '1', max: String(p.existencia),
           value: String(cantidades.get(p.id) || ''),
+          'data-sin-salto': true,
           estilo: { width: '100px', minHeight: '48px', textAlign: 'right' },
           oninput: () => {
             const v = parseInt(entrada.value, 10);

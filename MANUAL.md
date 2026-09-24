@@ -303,10 +303,11 @@ todos los mezcales), sin importar las tildes. Lo que ya escribiste en un
 producto **no se pierde** al buscar otro: puedes buscar, contar, buscar el
 siguiente, y al final registrar todo junto.
 
-**La tecla intro cierra el teclado y no salta a ningún producto.** El próximo de
-la lista no es el próximo del estante: se cuenta por estante y se busca cada
-uno. (En *Recibir mercancía* sí salta al siguiente, porque ahí se va bajando
-por la factura.)
+**La tecla intro cierra el teclado y no salta a ningún producto.** Pasa igual
+en Recibir mercancía, Devoluciones y Salida manual: se escribe la cantidad, se
+da intro, y el teclado se va sin escoger nada. Tú tocas el próximo encasillado.
+(Dentro del editor de un producto sí salta de un campo al siguiente, que para
+eso es un formulario.)
 
 ### Si se te interrumpe el conteo
 
