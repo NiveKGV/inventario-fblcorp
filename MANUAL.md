@@ -216,15 +216,28 @@ déjalos vacíos**: queda «sin tope» y no vuelve a avisar (punto 4).
 
 ## 6. Cuando llega la orden del proveedor
 
-1. **Administración → Lista de compra.**
-2. Ahí sale todo lo que hay que ordenar y cuánto, ya calculado.
-3. Cuando llegue el pedido, escribe en la columna **Recibido** lo que de verdad
-   entró (no lo que se pidió — lo que llegó).
-4. **Si llegó algo que no estaba en la lista** —una caja de más, un producto
-   nuevo, algo para un evento— búscalo en el encasillado de arriba y añádelo.
-   Se puede recibir cualquier producto, esté bajo el máximo o no.
-5. Escribe el proveedor o el número de factura.
-6. Toca **Registrar entrada al almacén**.
+Esta pantalla tiene **dos partes** y conviene no confundirlas:
+
+- **Arriba, «Lista de compra»:** lo que el sistema sugiere ordenar. Es para
+  pedir, no cambia el inventario.
+- **Abajo, «Recibir lo que llegó»:** ahí se entra la mercancía, con la factura
+  delante.
+
+Para recibir:
+
+1. **Administración → Lista de compra**, y baja a *Recibir lo que llegó*.
+2. La tabla viene con lo que el sistema sugirió ordenar. **Corrige la columna
+   «Llegaron»** con lo que dice la factura, botella por botella. Lo que no
+   llegó, déjalo en 0 o toca **Quitar** en ese renglón.
+3. **Si llegó algo que no está en la tabla** —una caja de más, un producto
+   nuevo, algo para un evento— búscalo por nombre en el encasillado y tócalo
+   para añadirlo. Se puede recibir cualquier producto, esté bajo el mínimo o no.
+4. Escribe el proveedor o el número de factura.
+5. Toca **Registrar entrada al almacén**.
+
+**Al almacén entra solo lo que escribas en «Llegaron».** Lo sugerido no entra
+por su cuenta, y quitar un renglón no borra nada del catálogo: solo lo saca de
+esa entrada.
 
 Aunque no haya nada bajo el máximo, la pantalla deja recibir igual.
 

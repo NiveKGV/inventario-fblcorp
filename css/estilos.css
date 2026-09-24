@@ -286,6 +286,10 @@ button { font-family: inherit; font-size: inherit; color: inherit; cursor: point
   transition: transform .06s ease, background .1s ease;
 }
 .tecla:active { transform: scale(.94); background: var(--panel-2); }
+/* Sin esto, Safari se guarda el toque un momento por si viene un segundo
+   toque para acercar la pantalla. En un teclado numérico eso se siente como
+   si el iPad fuera lento. */
+.tecla, .btn, .tecla-producto, .chip-categoria, .borrar-busqueda { touch-action: manipulation; }
 .tecla.aux { font-size: 16px; font-weight: 600; color: var(--texto-2); }
 
 .mensaje-error { color: var(--peligro); font-size: 15px; min-height: 22px; margin-top: 16px; font-weight: 600; }

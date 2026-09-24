@@ -596,7 +596,7 @@ async function vistaCompra() {
 
   const contenedorTabla = el('div');
   const buscador = el('input', {
-    type: 'search', placeholder: 'Buscar cualquier producto para añadirlo…',
+    type: 'search', placeholder: 'Escribe el nombre del licor…',
     autocomplete: 'off', autocorrect: 'off', autocapitalize: 'none', spellcheck: 'false',
   });
   const resultados = el('div', { clase: 'resultados-busqueda' });
@@ -606,7 +606,7 @@ async function vistaCompra() {
     contenedorTabla.replaceChildren(items.length
       ? tabla(
         ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Máximo', num: true },
-          { t: 'Sugerido', num: true }, { t: 'Recibido', num: true }, ''],
+          { t: 'Sugerido', num: true }, { t: 'Llegaron', num: true }, ''],
         items.map(({ producto: p, cantidad, sugerido }) => {
           const entrada = el('input', {
             type: 'number', min: '0', step: '1', value: String(cantidad),
@@ -630,7 +630,7 @@ async function vistaCompra() {
           ]);
         }),
       )
-      : el('p', { clase: 'vacio', texto: 'No hay nada en la recepción. Busca un producto arriba para añadirlo.' }));
+      : el('p', { clase: 'vacio', texto: 'No hay nada en esta entrada. Busca arriba el producto que llegó para añadirlo.' }));
   };
 
   const pintarResultados = () => {
@@ -669,12 +669,16 @@ async function vistaCompra() {
         el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Imprimir', onclick: () => window.print() }),
       ]) : null),
 
-    seccion('Recibir la orden',
-      'Ajusta la columna Recibido con lo que de verdad entró —no con lo que se pidió— y confirma. Entra al almacén solo lo que escribas aquí. Si llegó algo que no estaba en la lista, búscalo y añádelo.',
-      campo('Añadir un producto que no está en la lista', conBorrar(buscador)),
+    seccion('Recibir lo que llegó',
+      'Aquí se entra la mercancía con la factura delante: en la columna Llegaron escribe cuántas botellas entraron de verdad, '
+      + 'no lo que se pidió. La tabla viene con lo que el sistema sugirió ordenar, así que corrige cada número; lo que no '
+      + 'llegó, déjalo en 0 o quita el renglón. Al almacén entra solamente lo que escribas en esa columna.',
+      campo('¿Llegó algo que no está en la tabla?', conBorrar(buscador),
+        'Búscalo por nombre y tócalo para añadirlo arriba. Es para lo que llegó sin estar bajo el mínimo: un producto de un evento, '
+        + 'una caja de más, algo nuevo. Quitar un renglón no borra nada del catálogo, solo lo saca de esta entrada.'),
       resultados,
       contenedorTabla,
-      campo('Referencia', proveedor, 'Queda en el historial junto a la entrada.'),
+      campo('Proveedor o número de factura', proveedor, 'Queda en el historial y en Entradas, junto a lo que entró ese día.'),
       el('button', {
         clase: 'btn btn-primario',
         texto: 'Registrar entrada al almacén',

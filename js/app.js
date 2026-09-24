@@ -230,11 +230,32 @@ async function mostrarAcceso() {
     ...Array.from({ length: LARGO_CODIGO }, () => el('span', { clase: 'pin-punto' })),
   );
 
+  /* Las teclas responden al tocar (`pointerdown`) y no al soltar (`click`).
+
+     En el almacén se teclea rápido y de pie, y el `click` del iPad llega
+     después de levantar el dedo —y a veces con el retraso que Safari se
+     guarda por si el toque era un doble toque para acercar—. Se sentía lento
+     aunque el código fuera instantáneo.
+
+     El `click` que llega después se ignora: ya se atendió el `pointerdown`.
+     Se deja vivo solo para el teclado físico y los lectores de pantalla, que
+     disparan `click` sin `pointerdown`. */
   const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'borrar', '0', 'limpiar'];
+  const accion = (t) => {
+    if (t === 'borrar') return () => teclear(null);
+    if (t === 'limpiar') return () => teclear('reset');
+    return () => teclear(t);
+  };
   $('#acceso-teclado').replaceChildren(...teclas.map((t) => {
-    if (t === 'borrar') return el('button', { clase: 'tecla aux', texto: 'Borrar', onclick: () => teclear(null) });
-    if (t === 'limpiar') return el('button', { clase: 'tecla aux', texto: 'Limpiar', onclick: () => teclear('reset') });
-    return el('button', { clase: 'tecla', texto: t, onclick: () => teclear(t) });
+    const aux = t === 'borrar' || t === 'limpiar';
+    const pulsar = accion(t);
+    let porToque = false;
+    return el('button', {
+      clase: `tecla${aux ? ' aux' : ''}`,
+      texto: t === 'borrar' ? 'Borrar' : (t === 'limpiar' ? 'Limpiar' : t),
+      onpointerdown: (ev) => { porToque = true; ev.preventDefault(); pulsar(); },
+      onclick: () => { if (!porToque) pulsar(); porToque = false; },
+    });
   }));
 
   const alertas = await resumenAlertas();
@@ -267,16 +288,30 @@ function teclear(digito) {
   if (acceso.valor.length === LARGO_CODIGO) {
     acceso.ocupado = true;
     const valor = acceso.valor;
-    setTimeout(async () => {
+    /* Comprobar el código tarda: son 210.000 vueltas de PBKDF2, que es
+       justamente lo que hace que un código de 5 dígitos no se rompa en un
+       rato. Sin decir nada, ese silencio se lee como que el iPad se colgó.
+
+       Se espera a que el navegador pinte el quinto punto y el aviso antes de
+       arrancar el cálculo: `requestAnimationFrame` deja pasar el cuadro y el
+       `setTimeout` de 0 suelta el hilo. Antes había una espera fija de 130 ms
+       que se notaba en un iPad rápido y no alcanzaba en uno lento. */
+    $('#acceso-error').textContent = 'Comprobando…';
+    requestAnimationFrame(() => setTimeout(async () => {
       try {
         await intentarAcceso(valor);
       } catch (e) {
         console.error('Fallo al procesar el código:', e);
         errorAcceso(e.message || 'Algo falló. Vuelve a intentar.');
       } finally {
-        if (acceso) { acceso.valor = ''; acceso.ocupado = false; pintarPuntos(); }
+        if (acceso) {
+          acceso.valor = '';
+          acceso.ocupado = false;
+          pintarPuntos();
+          if ($('#acceso-error').textContent === 'Comprobando…') $('#acceso-error').textContent = '';
+        }
       }
-    }, 130);
+    }, 0));
   }
 }
 
@@ -316,8 +351,10 @@ async function registrarFallo() {
 }
 
 async function intentarAcceso(codigo) {
-  const bloqueado = Boolean(await DB.leerConfig('bloqueado_hasta', null))
-    && new Date(await DB.leerConfig('bloqueado_hasta', null)) > new Date();
+  // Una sola lectura: antes se pedía `bloqueado_hasta` dos veces seguidas para
+  // evaluar la misma condición, y cada lectura abre su propia transacción.
+  const hasta = await DB.leerConfig('bloqueado_hasta', null);
+  const bloqueado = Boolean(hasta) && new Date(hasta) > new Date();
 
   const sal = await DB.leerConfig('sal_codigos', null);
   if (!sal) throw new Error('Falta la configuración de seguridad. Restaura un respaldo.');
