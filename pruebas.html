@@ -884,6 +884,105 @@ igual([consumoPrepa.length, consumoPrepa[0].clave, consumoPrepa[0].unidades], [1
   'El consumo se le carga a Prepa, no a la barra del empleado');
 
 /* ------------------------------------------------------------------ */
+seccion('Costo real por botella y promociones');
+
+/* El problema que resuelve: el proveedor regala botellas. Si entran al
+   inventario al precio de compra, el valor del almacén y el consumo de cada
+   barra salen inflados por licor que nadie pagó. Nadie sabe cuál botella fue
+   la regalada —son idénticas—, así que no se marca ninguna: baja el promedio. */
+
+const promo = await producto('Ron con promoción', 0, 10, 5, 16);
+igual(M.costoReal(await DB.obtener('productos', promo.id)), 16,
+  'Un producto nuevo arranca con el costo real igual al precio de compra');
+
+await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: promo.id, cantidad: 12, promocion: 2 }],
+  ...EMP, motivo: 'Factura 900',
+});
+const trasPromo = await DB.obtener('productos', promo.id);
+igual(trasPromo.existencia, 12, 'Entran las 12, las pagadas y las de promoción');
+igual(trasPromo.costo, 16, 'El precio de compra no se mueve solo');
+igual(Math.round(M.costoReal(trasPromo) * 100) / 100, 13.33,
+  'El costo real baja: $160 pagados entre 12 botellas');
+
+const movPromo = (await DB.porIndice('movimientos', 'porProducto', promo.id))[0];
+igual(movPromo.promocion, 2, 'El movimiento guarda cuántas fueron de promoción');
+igual(Math.round(movPromo.delta * movPromo.costoUnitario), 160,
+  'La entrada vale el dinero exacto de la factura, no las 12 a precio de lista');
+
+/* Segunda entrega, sin promoción y a otro precio: el promedio es la mezcla de
+   las dos, no el último precio. */
+await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: promo.id, cantidad: 4, precioUnitario: 20 }],
+  ...EMP, motivo: 'Factura 901',
+});
+const trasSegunda = await DB.obtener('productos', promo.id);
+igual(Math.round(M.costoReal(trasSegunda) * 100) / 100, 15,
+  'Con 12 a $13.33 y 4 a $20, el costo real queda en $15');
+
+/* Al salir, la barra paga lo que costó el licor, no el precio de lista. */
+await M.registrarLote({
+  tipo: 'salida', lineas: [{ productoId: promo.id, cantidad: 2 }], ...EMP, restauranteId: REST,
+});
+const salidaPromo = (await DB.porIndice('movimientos', 'porProducto', promo.id))
+  .find((m) => m.tipo === 'salida');
+igual(salidaPromo.costoUnitario, 15,
+  'La salida se valora al costo real del momento, no al precio de compra');
+const movsPromo = (await M.movimientosPeriodo(hoy, hoy)).filter((m) => m.productoId === promo.id);
+igual(M.porRestaurante(movsPromo)[0].valor, 30,
+  'El consumo de la barra son 2 botellas a $15, no a $20');
+
+/* Una salida no cambia lo que costó lo que queda. */
+igual(M.costoReal(await DB.obtener('productos', promo.id)), 15,
+  'Sacar botellas no mueve el costo real');
+
+/* Un conteo tampoco: las botellas que aparecen valen lo mismo que sus hermanas. */
+await M.registrarLote({
+  tipo: 'ajuste', lineas: [{ productoId: promo.id, nuevaExistencia: 15, cantidad: 1 }],
+  ...EMP, motivo: 'Conteo',
+});
+igual(M.costoReal(await DB.obtener('productos', promo.id)), 15,
+  'Un ajuste por conteo tampoco mueve el costo real');
+
+/* Todo de promoción: el costo real cae a cero, que es lo que costó. */
+const regalado = await producto('Ron regalado', 0, 10, 5, 30);
+await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: regalado.id, cantidad: 6, promocion: 6 }],
+  ...EMP, motivo: 'Muestra del proveedor',
+});
+const todoGratis = await DB.obtener('productos', regalado.id);
+igual([M.costoReal(todoGratis), todoGratis.costo], [0, 30],
+  'Seis botellas regaladas valen $0, y el precio de compra sigue siendo $30');
+const alertas = await M.resumenAlertas();
+anotar(alertas.valorInventario >= 0, 'El valor del inventario se calcula con el costo real');
+
+/* Revertir una entrada le devuelve su dinero al promedio: si la orden nunca
+   existió, no puede seguir pesando en lo que valen las botellas que quedan. */
+const revertida = await producto('Ron de orden revertida', 4, 10, 5, 10);
+await DB.guardar('productos', { ...(await DB.obtener('productos', revertida.id)), costoPromedio: 10 });
+const loteMalo = (await M.registrarLote({
+  tipo: 'entrada', lineas: [{ productoId: revertida.id, cantidad: 4, precioUnitario: 20 }],
+  ...EMP, motivo: 'Factura equivocada',
+})).loteId;
+igual(M.costoReal(await DB.obtener('productos', revertida.id)), 15,
+  'Tras la entrada mala, el costo real sube a $15');
+await M.revertirLote(loteMalo, { ...EMP, motivo: 'Orden equivocada' });
+igual(M.costoReal(await DB.obtener('productos', revertida.id)), 10,
+  'Al revertirla, el costo real vuelve a lo que era');
+
+/* Los productos de antes de esta distinción no tienen costoPromedio: valen su
+   precio de compra hasta que entre mercancía, y el iPad se los rellena al abrir. */
+const deAntes = await producto('Ron de antes', 5, 10, 5, 25);
+await DB.guardar('productos', (() => { const { costoPromedio, ...resto } = deAntes; return resto; })());
+igual(M.costoReal(await DB.obtener('productos', deAntes.id)), 25,
+  'Un producto sin costo real cae a su precio de compra, no a cero');
+const DatosCostos = await import('./js/datos.js');
+anotar(await DatosCostos.alinearCostos() >= 1, 'Al abrir, el iPad le escribe el costo real que le faltaba');
+igual((await DB.obtener('productos', deAntes.id)).costoPromedio, 25,
+  'Y ese costo es exactamente lo que el sistema creía que valía: nadie ve un número distinto');
+igual(await DatosCostos.alinearCostos(), 0, 'Abrir otra vez no cambia nada');
+
+/* ------------------------------------------------------------------ */
 seccion('Borradores de lo que quedó a medias');
 
 const B = await import('./js/borradores.js');

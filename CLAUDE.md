@@ -320,6 +320,44 @@ la consulta salía vacía y la prueba reventaba en `[0].unidades`. Corregido a
 `diaOperativo(new Date(), 5)`. Cualquier prueba que consulte movimientos por
 fecha tiene que usar el día operativo, nunca la fecha del calendario.
 
+### Dos costos por producto: precio de compra y costo real (sept 2026)
+
+El proveedor regala botellas. Entraban al inventario valoradas al precio de
+compra, así que el valor del almacén y el consumo de cada barra salían
+inflados por licor que nadie pagó.
+
+- `producto.costo` = **precio de compra**. Lo escribe una persona, no se mueve
+  solo, y es el que estima la orden en la lista de compra (ahí el promedio
+  dejaría el pedido corto de dinero).
+- `producto.costoPromedio` = **costo real por botella**, promedio ponderado
+  recalculado en cada `entrada`: `(existencia × promedio + pagado) / (existencia + entran)`.
+  Valora el inventario (`resumenAlertas`) y se estampa en `costoUnitario` de
+  todo movimiento que no sea entrada, así que el consumo de una barra vale lo
+  que costó el licor que se llevó.
+- En una `entrada`, `costoUnitario` es el dinero de la factura repartido entre
+  TODAS las botellas que entraron (con la promoción dentro): así «Lo que entró»
+  suma el dinero exacto que se pagó.
+- La línea de una entrada acepta `promocion` (cuántas no se pagaron) y
+  `precioUnitario` (si esa entrega vino a otro precio).
+
+**No se marca ninguna botella como regalada.** Son idénticas y nadie sabría
+cuál es; el promedio es justamente lo que resuelve eso sin inventar datos.
+
+Detalles que sostienen esto:
+
+- Solo las entradas mueven el promedio. Salidas y conteos no: las botellas que
+  salen o aparecen valen lo mismo que sus hermanas.
+- Revertir una entrada le devuelve su dinero al promedio (exacto si no pasó
+  nada en el medio; nunca baja de cero).
+- `alinearCostos()` en `datos.js` le pone `costoPromedio = costo` a los
+  productos viejos, al abrir y al restaurar un respaldo. **No se recalcula el
+  pasado**: las entradas viejas no registraron promociones y cualquier
+  recálculo sería inventado.
+- La importación de catálogo **no pisa** `costoPromedio` en productos que ya
+  existen: una lista de precios nueva no cambia lo que ya se pagó.
+- Cuatro decimales en el promedio (`redondearCentavos`): a dos, el error se
+  va acumulando entrada tras entrada.
+
 ### Borradores de lo que quedó a medias (sept 2026)
 
 Un conteo de ciento treinta botellas y el carrito de un empleado vivían solo en

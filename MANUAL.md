@@ -229,15 +229,51 @@ Para recibir:
 2. La tabla viene con lo que el sistema sugirió ordenar. **Corrige la columna
    «Llegaron»** con lo que dice la factura, botella por botella. Lo que no
    llegó, déjalo en 0 o toca **Quitar** en ese renglón.
-3. **Si llegó algo que no está en la tabla** —una caja de más, un producto
+3. Si el proveedor regaló botellas, escribe cuántas en la columna
+   **«Promoción»**. Llegaron 12 y dos fueron regaladas: *Llegaron 12,
+   Promoción 2*. Entran las doce al inventario, pero el sistema sabe que solo
+   pagaste diez.
+4. **Si llegó algo que no está en la tabla** —una caja de más, un producto
    nuevo, algo para un evento— búscalo por nombre en el encasillado y tócalo
    para añadirlo. Se puede recibir cualquier producto, esté bajo el mínimo o no.
-4. Escribe el proveedor o el número de factura.
-5. Toca **Registrar entrada al almacén**.
+5. Escribe el proveedor o el número de factura.
+6. Toca **Registrar entrada al almacén**.
 
 **Al almacén entra solo lo que escribas en «Llegaron».** Lo sugerido no entra
 por su cuenta, y quitar un renglón no borra nada del catálogo: solo lo saca de
 esa entrada.
+
+### Los dos costos, y por qué hay dos
+
+En Inventario cada producto tiene dos columnas de dinero, y no dicen lo mismo:
+
+| | Qué es |
+|---|---|
+| **Precio de compra** | Lo que el proveedor cobra por botella. Lo escribes tú y **no cambia solo**: solo cambia el día que el proveedor suba o baje el precio. Con él se estima cuánto va a costar la orden. |
+| **Costo real** | Lo que de verdad te costó por botella lo que hay en el estante. Lo calcula el sistema y **baja cuando entra mercancía de promoción**. Con él se calcula el valor del inventario y el consumo de cada barra. |
+
+Con el ejemplo de arriba: llegaron 12 y pagaste 10 a $19, o sea $190 por doce
+botellas. Si ya tenías 16 a $19 ($304), ahora tienes 28 botellas que te
+costaron $494: el costo real queda en **$17.64**. El precio de compra sigue
+siendo $19.
+
+**Nadie marca cuál botella fue la regalada** — son idénticas y no habría cómo
+saberlo. Por eso no se marca ninguna: entran todas y lo que baja es el
+promedio. Cuando se acaben esas 28, se habrán cargado exactamente los $494 que
+pagaste, ni un peso más.
+
+Eso también arregla algo que ya pasaba sin promociones: si el proveedor te sube
+el precio, las botellas que ya tenías no se vuelven más caras. Tu estante es
+una mezcla, y el costo real lo refleja.
+
+**En los reportes**, el consumo de cada barra se valora al costo real. Si una
+botella te salió más barata porque vino con promoción, la barra no paga de más.
+
+**Lo que ya estaba en el iPad no se recalcula.** Las entradas viejas nunca
+registraron promociones, así que no hay de dónde sacar ese número: cada
+producto arranca con el costo real igual a su precio de compra, y se va
+corrigiendo solo con cada entrada nueva. Si de algún producto sabes la cuenta
+exacta, puedes corregirlo a mano en el editor.
 
 Aunque no haya nada bajo el máximo, la pantalla deja recibir igual.
 

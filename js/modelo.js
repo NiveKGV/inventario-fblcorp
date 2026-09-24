@@ -174,6 +174,24 @@ async function registrarLote({
       if (!producto) throw new Error('Un producto del lote ya no existe en el catálogo.');
 
       const antes = producto.existencia;
+      /* Dos números por producto, y no hay que confundirlos:
+
+         `costo` es el PRECIO DE COMPRA — lo que el proveedor cobra por botella.
+         No se mueve solo; lo cambia una persona cuando el proveedor sube o
+         baja. Es el que estima la orden en la lista de compra.
+
+         `costoPromedio` es el COSTO REAL por botella de lo que hay en el
+         estante: el dinero que se pagó repartido entre las botellas que hay.
+         Nadie puede saber cuál botella vino de promoción —son idénticas—, así
+         que no se marca ninguna: entran todas y baja el promedio. Con él se
+         valora el inventario y se le carga el consumo a cada barra, que es lo
+         único que cuadra con lo que salió del banco.
+
+         Un producto de antes de esta distinción no lo tiene: se cae a `costo`,
+         que es exactamente lo que valía hasta ahora. */
+      const promedioAntes = Number.isFinite(producto.costoPromedio)
+        ? producto.costoPromedio
+        : (producto.costo || 0);
       let delta;
       if (tipo === 'ajuste') {
         const nueva = Number(linea.nuevaExistencia);
@@ -194,6 +212,34 @@ async function registrarLote({
       }
 
       producto.existencia = despues;
+
+      /* Promedio ponderado, recalculado en cada entrada.
+
+         Llegan 12 y se pagaron 10 a $16: entraron 12 botellas y salieron $160
+         del banco, así que cada una vale $13.33. Si ya había 3 a $16, son 15
+         botellas por $208 y el promedio queda en $13.87. Cuando se acaben,
+         se habrá cargado exactamente lo que se pagó, ni un peso más.
+
+         Solo lo mueven las entradas. Una salida no cambia lo que costó lo que
+         queda, y un conteo tampoco: las botellas que aparecen o faltan en un
+         conteo valen lo mismo que sus hermanas. */
+      let promedio = promedioAntes;
+      if (tipo === 'entrada') {
+        const promocion = Math.max(0, Math.min(Number(linea.promocion) || 0, Number(linea.cantidad)));
+        const pagadas = Number(linea.cantidad) - promocion;
+        const precio = Number.isFinite(linea.precioUnitario) ? linea.precioUnitario : (producto.costo || 0);
+        const pagado = pagadas * precio;
+        const habia = Math.max(0, antes);
+        promedio = (habia + delta) > 0 ? ((habia * promedioAntes) + pagado) / (habia + delta) : precio;
+        producto.costoPromedio = redondearCentavos(promedio);
+        linea.promocionAplicada = promocion;
+        linea.dineroPagado = pagado;
+      } else if (!Number.isFinite(producto.costoPromedio)) {
+        // Primera vez que se toca un producto viejo: se le deja escrito lo que
+        // ya valía, para que el campo exista y nadie tenga que adivinarlo.
+        producto.costoPromedio = producto.costo || 0;
+      }
+
       await pedir(s.productos.put(producto));
 
       movimientos.push({
@@ -209,7 +255,18 @@ async function registrarLote({
         restauranteId: def.requiereRestaurante ? restauranteId : null,
         empleadoId,
         empleadoNombre,
-        costoUnitario: producto.costo || 0,
+        /* Lo que valió ESTE movimiento, congelado el día que pasó.
+
+           En una entrada es lo que de verdad se pagó por botella en esa
+           entrega, con la promoción ya repartida: así el reporte de lo que
+           entró suma el dinero exacto de la factura. En todo lo demás es el
+           costo real por botella de ese momento, para que el consumo de una
+           barra valga lo que costó el licor que se llevó. */
+        costoUnitario: tipo === 'entrada'
+          ? (delta > 0 ? redondearCentavos((linea.dineroPagado || 0) / delta) : 0)
+          : redondearCentavos(promedio),
+        // Cuántas de las que entraron fueron de promoción. Solo en entradas.
+        promocion: tipo === 'entrada' ? (linea.promocionAplicada || 0) : 0,
         // Tope duro en el modelo, no solo en el formulario: el motivo viaja al
         // CSV y a la lista impresa. Un texto sin límite se convierte en papel.
         motivo: motivo.trim().slice(0, 200),
@@ -273,6 +330,22 @@ async function revertirLote(loteId, { empleadoId, empleadoNombre, motivo = 'Corr
         );
       }
       producto.existencia = despues;
+
+      /* Revertir una entrada devuelve también el dinero al promedio: si la
+         orden de 12 nunca existió, su costo no puede seguir pesando en lo que
+         valen las botellas que quedan. Es exacto cuando no pasó nada en el
+         medio, y una aproximación buena cuando sí —mejor que dejar el promedio
+         contaminado por una orden que se borró—. Nunca baja de cero. */
+      if (orig.tipo === 'entrada' && despues >= 0) {
+        const promedioAntes = Number.isFinite(producto.costoPromedio)
+          ? producto.costoPromedio
+          : (producto.costo || 0);
+        const dineroQueSale = Math.abs(delta) * (orig.costoUnitario || 0);
+        producto.costoPromedio = despues > 0
+          ? Math.max(0, redondearCentavos(((antes * promedioAntes) - dineroQueSale) / despues))
+          : (producto.costo || 0);
+      }
+
       await pedir(s.productos.put(producto));
 
       espejos.push({
@@ -435,6 +508,17 @@ function sumasPorDia(movs, revertidos = new Set()) {
     .sort((a, b) => (a.dia < b.dia ? 1 : -1));
 }
 
+/* El costo real por botella, con respaldo para los productos que todavía no lo
+   tienen: valían su precio de compra y eso es lo que valen. */
+function costoReal(p) {
+  return Number.isFinite(p.costoPromedio) ? p.costoPromedio : (p.costo || 0);
+}
+
+/* Cuatro decimales y no dos: el promedio de 12 botellas por $160 es 13,3333…,
+   y redondear a centavos en cada entrada iría corriendo el error hasta que el
+   valor del inventario dejara de cuadrar con lo que se pagó. */
+const redondearCentavos = (n) => Math.round(n * 10000) / 10000;
+
 const porRestaurante = (movs) => agregar(movs, (m) => m.restauranteId);
 const porEmpleado = (movs) => agregar(movs, (m) => m.empleadoId);
 const porProducto = (movs) => agregar(movs, (m) => m.productoId);
@@ -476,7 +560,9 @@ async function resumenAlertas() {
     // sentarse con el gerente y ponerle niveles a lo que sí los necesita.
     sinTopes,
     porOrdenar: agotados + criticos + bajos,
-    valorInventario: productos.reduce((s, p) => s + p.existencia * (p.costo || 0), 0),
+    // Con el costo real por botella y no con el precio de compra: es dinero
+    // parado en el estante, no lo que costaría reponerlo.
+    valorInventario: productos.reduce((s, p) => s + p.existencia * costoReal(p), 0),
   };
 }
 
@@ -486,5 +572,5 @@ export {
   estadoStock, localesDe, registrarLote, revertirLote,
   productosActivos, listaCompra, movimientosPeriodo,
   porRestaurante, porEmpleado, porProducto, entradasPorProducto,
-  consumoSemanal, resumenAlertas, lotesRevertidos, sumasPorDia, COMO_SE_SUMO,
+  consumoSemanal, resumenAlertas, lotesRevertidos, sumasPorDia, COMO_SE_SUMO, costoReal,
 };

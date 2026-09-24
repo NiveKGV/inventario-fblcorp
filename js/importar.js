@@ -283,6 +283,10 @@ async function aplicar(plan, { empleadoId, empleadoNombre }) {
           costo: l.costo,
           par: l.par,
           puntoReorden: l.reorden,
+          /* El costo real NO se pisa con el precio de la plantilla: es lo que
+             costó lo que hay en el estante, y una lista de precios nueva no
+             cambia lo que ya se pagó. Solo se rellena si nunca existió. */
+          costoPromedio: Number.isFinite(p.costoPromedio) ? p.costoPromedio : l.costo,
         });
         await pedir(s.productos.put(p));
         actualizados += 1;
@@ -298,6 +302,10 @@ async function aplicar(plan, { empleadoId, empleadoNombre }) {
         par: l.par,
         puntoReorden: l.reorden,
         costo: l.costo,
+        /* Un producto que nace por el catálogo no tiene historia de compras:
+           lo que costó lo que entra es el precio de la plantilla. Desde la
+           primera entrada con promoción, el promedio se separa solo. */
+        costoPromedio: l.costo,
         activo: true,
       };
       await pedir(s.productos.put(producto));

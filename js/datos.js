@@ -143,6 +143,8 @@ function productosIniciales() {
     par,
     puntoReorden,
     costo,
+    // Nace sin historia de compras: lo que costó es lo que dice el catálogo.
+    costoPromedio: costo,
     orden: i,
     activo: true,
     ejemplo: true,
@@ -277,7 +279,25 @@ async function alinearRestaurantes() {
   return faltan.length;
 }
 
+/* El costo real por botella en un iPad que ya estaba instalado.
+
+   Arranca igual al precio de compra, que es exactamente lo que el sistema
+   creía que valía cada botella hasta ahora: nadie ve un número distinto al
+   abrir. Desde la próxima entrada, las promociones lo van bajando solas.
+
+   No se recalcula nada hacia atrás, y no se puede: las entradas viejas nunca
+   registraron cuántas botellas vinieron de promoción, así que cualquier
+   «recálculo» sería un número inventado. */
+async function alinearCostos() {
+  const productos = await DB.todos('productos');
+  const faltan = productos.filter((p) => !Number.isFinite(p.costoPromedio));
+  if (faltan.length) {
+    await DB.guardarVarios('productos', faltan.map((p) => ({ ...p, costoPromedio: p.costo || 0 })));
+  }
+  return faltan.length;
+}
+
 export {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
-  alinearRestaurantes,
+  alinearRestaurantes, alinearCostos,
 };

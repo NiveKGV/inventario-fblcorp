@@ -15,7 +15,7 @@ import {
 } from './cripto.js';
 import {
   RESTAURANTES, CATEGORIAS, productosIniciales, empleadosEjemplo, alinearCategorias,
-  alinearRestaurantes,
+  alinearRestaurantes, alinearCostos,
 } from './datos.js';
 import {
   ESTADOS, estadoStock, localesDe, registrarLote, productosActivos, resumenAlertas,
@@ -88,6 +88,12 @@ async function iniciar() {
       await alinearRestaurantes();
     } catch (e) {
       console.warn('No se pudieron alinear los restaurantes:', e);
+    }
+    // Y el costo real por botella, que arranca igual al precio de compra.
+    try {
+      await alinearCostos();
+    } catch (e) {
+      console.warn('No se pudieron alinear los costos:', e);
     }
     await cargarCache();
     mostrarAcceso();
@@ -300,7 +306,11 @@ function teclear(digito) {
        `setTimeout` de 0 suelta el hilo. Antes había una espera fija de 130 ms
        que se notaba en un iPad rápido y no alcanzaba en uno lento. */
     $('#acceso-error').textContent = 'Comprobando…';
-    requestAnimationFrame(() => setTimeout(async () => {
+
+    let arrancado = false;
+    const comprobar = async () => {
+      if (arrancado) return;
+      arrancado = true;
       try {
         await intentarAcceso(valor);
       } catch (e) {
@@ -314,7 +324,15 @@ function teclear(digito) {
           if ($('#acceso-error').textContent === 'Comprobando…') $('#acceso-error').textContent = '';
         }
       }
-    }, 0));
+    };
+    requestAnimationFrame(() => setTimeout(comprobar, 0));
+    /* Red de seguridad: `requestAnimationFrame` NO corre si la página está
+       oculta —pantalla apagada, app en segundo plano, otra app encima—. Sin
+       esto, teclear el quinto dígito justo cuando el iPad se apaga dejaba el
+       acceso clavado en «Comprobando…» para siempre, y había que cerrar la app
+       para salir. Lo que dispare primero gana; `arrancado` impide que corra
+       dos veces. */
+    setTimeout(comprobar, 200);
   }
 }
 

@@ -10,12 +10,12 @@ import {
   descifrarRespaldo, esRespaldoCifrado,
 } from './cripto.js';
 import {
-  productosIniciales, empleadosEjemplo, alinearCategorias, alinearRestaurantes,
+  productosIniciales, empleadosEjemplo, alinearCategorias, alinearRestaurantes, alinearCostos,
 } from './datos.js';
 import {
   estadoStock, localesDe, registrarLote, revertirLote, productosActivos, listaCompra,
   movimientosPeriodo, porRestaurante, porEmpleado, porProducto, entradasPorProducto,
-  consumoSemanal, lotesRevertidos, sumasPorDia, COMO_SE_SUMO,
+  consumoSemanal, lotesRevertidos, sumasPorDia, COMO_SE_SUMO, costoReal,
   resumenAlertas, fechaPR, diaOperativoActual, sumarDias, fechaHoraPR, horaPR, TIPOS,
 } from './modelo.js';
 import {
@@ -300,7 +300,7 @@ async function vistaResumen() {
       dato(numero(salidasHoy), 'botellas salieron hoy', '', () => modalSalidasHoy(movsHoy)),
       dato(dinero(alertas.valorInventario), 'valor del inventario', '', () => modalProductos(
         'Valor del inventario', `${dinero(alertas.valorInventario)} a costo, de mayor a menor.`,
-        [...productos].sort((a, b) => (b.existencia * (b.costo || 0)) - (a.existencia * (a.costo || 0))),
+        [...productos].sort((a, b) => (b.existencia * costoReal(b)) - (a.existencia * costoReal(a))),
       )),
     ]),
     seccion('Acciones rápidas', null, el('div', { estilo: { display: 'flex', gap: '12px', flexWrap: 'wrap' } }, [
@@ -367,7 +367,8 @@ async function vistaInventario() {
     ).includes(q));
     contenedor.replaceChildren(tabla(
       ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Máximo', num: true },
-        { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true }, { t: 'Costo', num: true }, 'Estado', ''],
+        { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true },
+        { t: 'Precio compra', num: true }, { t: 'Costo real', num: true }, 'Estado', ''],
       lista.map((p) => {
         const cat = categorias.find((c) => c.id === p.categoriaId);
         const cs = semanal.get(p.id) || 0;
@@ -388,6 +389,14 @@ async function vistaInventario() {
           el('td', { clase: 'num', texto: String(p.puntoReorden) }),
           el('td', { clase: 'num', texto: cs ? cs.toFixed(1) : '—' }),
           el('td', { clase: 'num', texto: p.costo ? dinero(p.costo) : '—' }),
+          /* Lo que de verdad costó lo que hay, que baja con las promociones.
+             Se marca cuando se separó del precio de compra: si no, parecen la
+             misma cifra repetida y nadie entiende para qué están las dos. */
+          el('td', {
+            clase: 'num',
+            texto: costoReal(p) ? dinero(costoReal(p)) : '—',
+            estilo: Math.abs(costoReal(p) - (p.costo || 0)) > 0.005 ? { color: 'var(--ok)' } : {},
+          }),
           el('td', {}, [etiquetaEstado(estadoStock(p))]),
           el('td', { clase: 'num' }, [
             el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Editar', onclick: () => modalProducto(p) }),
@@ -402,6 +411,8 @@ async function vistaInventario() {
   return el('div', {}, [
     seccion('Catálogo del almacén',
       'Toca un producto para ver todo lo que le ha pasado: cuándo entró, cuándo salió, cuándo se contó y cuántas quedaban después de cada cosa. '
+      + 'El precio de compra es lo que cobra el proveedor y lo escribes tú; el costo real es lo que te costó por botella lo que hay en el estante, '
+      + 'y baja solo cuando entra mercancía de promoción. El valor del inventario y el consumo de cada barra se calculan con el costo real. '
       + 'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
       el('div', { clase: 'seccion-barra' }, [
         el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [conBorrar(buscador)]),
@@ -460,7 +471,8 @@ async function modalProducto(producto) {
       el('div', { clase: 'fila-campos-3' }, [
         campo('Máximo', par, 'Cuánto debe haber cuando el almacén está completo. Déjalo vacío si este licor no se repone por nivel'),
         campo('Mínimo', reorden, 'Al llegar aquí se pone en rojo: hay que pedir'),
-        campo('Costo por unidad', costo, 'USD, opcional'),
+        campo('Precio de compra por botella', costo,
+          'Lo que cobra el proveedor. No cambia solo: solo cuando tú lo cambies. Con él se estima la orden en la lista de compra.'),
       ]),
       esNuevo ? campo('Existencia inicial', existencia, 'Lo que hay físicamente hoy en el almacén.') : null,
       err,
@@ -554,6 +566,13 @@ async function modalProducto(producto) {
               par: vPar,
               puntoReorden: vReorden,
               costo: Math.max(0, Number(costo.value) || 0),
+              /* Un producto nuevo estrena costo real igual al precio de
+                 compra. En uno que ya existe NO se toca: cambiar el precio
+                 del proveedor no cambia lo que costó lo que está en el
+                 estante. */
+              costoPromedio: esNuevo
+                ? Math.max(0, Number(costo.value) || 0)
+                : (Number.isFinite(p.costoPromedio) ? p.costoPromedio : Math.max(0, Number(costo.value) || 0)),
               existencia: esNuevo ? vExistencia : p.existencia,
               activo: true,
               ejemplo: false,
@@ -594,8 +613,10 @@ async function vistaCompra() {
   const totalUnidades = lista.reduce((s, p) => s + p.aOrdenar, 0);
   const totalCosto = lista.reduce((s, p) => s + p.costoOrden, 0);
 
-  /* productoId -> { producto, cantidad, sugerido } */
-  const filas = new Map(lista.map((p) => [p.id, { producto: p, cantidad: p.aOrdenar, sugerido: p.aOrdenar }]));
+  /* productoId -> { producto, cantidad, promocion, sugerido } */
+  const filas = new Map(lista.map((p) => [p.id, {
+    producto: p, cantidad: p.aOrdenar, promocion: 0, sugerido: p.aOrdenar,
+  }]));
 
   const contenedorTabla = el('div');
   /* Los encasillados de cantidad, por producto: la tabla se vuelve a dibujar
@@ -613,8 +634,9 @@ async function vistaCompra() {
     contenedorTabla.replaceChildren(items.length
       ? tabla(
         ['Producto', 'Estado', { t: 'Quedan', num: true }, { t: 'Máximo', num: true },
-          { t: 'Sugerido', num: true }, { t: 'Llegaron', num: true }, ''],
-        items.map(({ producto: p, cantidad, sugerido }) => {
+          { t: 'Sugerido', num: true }, { t: 'Llegaron', num: true },
+          { t: 'Promoción', num: true }, ''],
+        items.map(({ producto: p, cantidad, promocion, sugerido }) => {
           const entrada = el('input', {
             type: 'number', min: '0', step: '1', value: String(cantidad),
             'data-sin-salto': true,
@@ -624,6 +646,17 @@ async function vistaCompra() {
             },
           });
           entradasCantidad.set(p.id, entrada);
+          /* De las que llegaron, cuántas no se pagaron. No se marca ninguna
+             botella en particular —son idénticas y nadie sabría cuál es—:
+             entran todas y lo que baja es el costo real por botella. */
+          const regalo = el('input', {
+            type: 'number', min: '0', step: '1', value: promocion ? String(promocion) : '',
+            'data-sin-salto': true, placeholder: '0',
+            estilo: { width: '84px', minHeight: '48px', textAlign: 'right' },
+            oninput: () => {
+              filas.get(p.id).promocion = Math.max(0, parseInt(regalo.value, 10) || 0);
+            },
+          });
           return el('tr', {}, [
             el('td', { texto: p.nombre }),
             el('td', {}, [etiquetaEstado(estadoStock(p))]),
@@ -631,6 +664,7 @@ async function vistaCompra() {
             el('td', { clase: 'num', texto: String(p.par) }),
             el('td', { clase: 'num', texto: sugerido ? String(sugerido) : '—' }),
             el('td', { clase: 'num' }, [entrada]),
+            el('td', { clase: 'num' }, [regalo]),
             el('td', { clase: 'num' }, [el('button', {
               clase: 'btn btn-chico btn-fantasma',
               texto: 'Quitar',
@@ -705,12 +739,21 @@ async function vistaCompra() {
         onclick: async () => {
           const lineas = [...filas.values()]
             .filter(({ cantidad }) => cantidad > 0)
-            .map(({ producto, cantidad }) => ({ productoId: producto.id, cantidad }));
+            .map(({ producto, cantidad, promocion }) => ({
+              productoId: producto.id,
+              cantidad,
+              promocion: Math.min(promocion || 0, cantidad),
+            }));
           if (!lineas.length) { brindis({ texto: 'No hay cantidades que registrar', tipo: 'error' }); return; }
           const total = lineas.reduce((s, l) => s + l.cantidad, 0);
+          const gratis = lineas.reduce((s, l) => s + (l.promocion || 0), 0);
           if (!await confirmar({
             titulo: 'Registrar entrada',
-            mensaje: `Van a entrar ${total} unidades al almacén en ${lineas.length} productos. Esto suma al inventario y queda en el historial a tu nombre.`,
+            mensaje: `Van a entrar ${total} unidades al almacén en ${lineas.length} ${lineas.length === 1 ? 'producto' : 'productos'}. `
+              + (gratis
+                ? `${gratis} ${gratis === 1 ? 'es de promoción y no se pagó' : 'son de promoción y no se pagaron'}, así que el costo real por botella baja. `
+                : '')
+              + 'Esto suma al inventario y queda en el historial a tu nombre.',
             textoSi: 'Registrar',
           })) return;
           try {
@@ -840,6 +883,9 @@ function detalleSuma(m, nombreRest) {
   // «Entrada de mercancía» es lo que se guarda cuando nadie escribió proveedor:
   // repetirlo al lado de «Llegó del proveedor» no dice nada.
   if (m.tipo === 'entrada' && m.motivo && m.motivo !== 'Entrada de mercancía') partes.push(m.motivo);
+  if (m.tipo === 'entrada' && m.promocion > 0) {
+    partes.push(`${m.promocion} de promoción`);
+  }
   if (m.tipo === 'devolucion') partes.push(nombreRest(m.restauranteId));
   if (m.tipo === 'ajuste') partes.push(`el sistema decía ${m.existenciaAntes}`);
   if (m.revertida) partes.push('revertida, no cuenta');
@@ -895,7 +941,8 @@ async function modalFichaProducto(p) {
 
   abrirModal({
     titulo: p.nombre,
-    subtitulo: `${p.tamano ? `${p.tamano} · ` : ''}Hay ${p.existencia} · Máximo ${p.par} · Mínimo ${p.puntoReorden}`,
+    subtitulo: `${p.tamano ? `${p.tamano} · ` : ''}Hay ${p.existencia} · Máximo ${p.par} · Mínimo ${p.puntoReorden}`
+      + ` · Precio de compra ${dinero(p.costo || 0)} · Costo real ${dinero(costoReal(p))}`,
     contenido: cuerpo,
     ancho: true,
     botones: [
@@ -908,8 +955,12 @@ async function modalFichaProducto(p) {
 function quePaso(m, nombreRest, revertidos) {
   let t;
   if (m.tipo === 'entrada') {
-    t = ['Llegó del proveedor', m.motivo !== 'Entrada de mercancía' ? m.motivo : '', `recibió ${m.empleadoNombre}`]
-      .filter(Boolean).join(' · ');
+    t = [
+      'Llegó del proveedor',
+      m.motivo !== 'Entrada de mercancía' ? m.motivo : '',
+      m.promocion > 0 ? `${m.promocion} de promoción` : '',
+      `recibió ${m.empleadoNombre}`,
+    ].filter(Boolean).join(' · ');
   } else if (m.tipo === 'salida') {
     t = `Salió a ${nombreRest(m.restauranteId)} · ${m.empleadoNombre}`;
   } else if (m.tipo === 'devolucion') {
@@ -2232,6 +2283,8 @@ async function vistaSistema() {
             await alinearCategorias();
             // Igual con los locales: un respaldo de antes de Prepa lo borraría del iPad.
             await alinearRestaurantes();
+            // Y con el costo real por botella, que un respaldo viejo no trae.
+            await alinearCostos();
             /* Queda anotado quién restauró y cuántos movimientos había antes y
                después. Sin esto, una restauración es indistinguible de que no
                hubiera pasado nada, y es la operación con más poder del sistema. */
