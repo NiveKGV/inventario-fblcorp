@@ -177,9 +177,21 @@ Detalles que sostienen esta publicación y no hay que romper:
   existiendo. Por eso el respaldo manual no es opcional.
   <https://webkit.org/tracking-prevention/> y
   <https://webkit.org/blog/14403/updates-to-storage-policy/>
-- **Red primero en el service worker.** Con caché primero, subir una corrección
-  no la aplicaba: el iPad seguía abriendo la versión vieja. Pasó durante el
-  desarrollo, y también contaminó la base de datos real con datos de prueba.
+- **La PÁGINA va a la red primero; los ARCHIVOS, a la caché primero.** La
+  navegación tiene que ir a la red porque es lo que dispara la comprobación del
+  service worker: con caché primero ahí, subir una corrección no la aplicaba y
+  el iPad seguía abriendo la versión vieja (pasó durante el desarrollo, y
+  contaminó la base real con datos de prueba). Los estilos, módulos e iconos no
+  necesitan esa comprobación —la copia entera se renueva al instalar una
+  versión nueva—, y preguntar por cada uno costaba segundos en el almacén: con
+  wifi débil, la petición no falla, se queda colgando hasta el tope. El precio
+  de esto es la regla de siempre, ahora sin red de seguridad: **subir VERSION
+  en cada publicación.**
+- **Pantallas de arranque de iOS** (`iconos/arranque-*.png`, generadas con
+  `herramientas/generar-arranque.py`). Sin ellas iOS pinta un rectángulo blanco
+  mientras levanta el navegador. Van en `ARCHIVOS` del service worker: si no
+  están guardadas, sin internet vuelve el blanco. Se escogen por tamaño exacto
+  y orientación; el iPad que no cuadre con ninguna ve el blanco de siempre.
 - **PBKDF2 con 210.000 iteraciones.** Medido: 50 ms por derivación, que es lo que
   tarda identificar a una persona por su código. Un código de 5 dígitos nunca es
   una contraseña fuerte; esto solo evita que aparezca legible en la base o en un
