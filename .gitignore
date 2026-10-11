@@ -1,2 +1,5 @@
 .DS_Store
 *.log
+
+# El estado del proyecto no se publica: lleva asuntos y precios del cliente.
+ESTADO.md
