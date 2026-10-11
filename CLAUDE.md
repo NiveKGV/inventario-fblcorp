@@ -370,6 +370,52 @@ Detalles que sostienen esto:
 - Cuatro decimales en el promedio (`redondearCentavos`): a dos, el error se
   va acumulando entrada tras entrada.
 
+**Dónde se enseña el dinero (oct 2026).** Las dos columnas de costo salieron de
+la tabla de Inventario: con el iPad de pie la tabla ya se iba de la pantalla, y
+cincuenta y ocho renglones de precios por botella no es lo que se mira todos los
+días. El dinero quedó donde se pregunta:
+
+- **Ficha del producto** (tocar el renglón): `existencia × costoReal(p)` junto a
+  la existencia, y detrás los dos costos por botella — que es donde se ve el
+  efecto de una promoción.
+- **Inventario**, una línea sobre la tabla con el total a costo **de lo que el
+  buscador tenga filtrado**: «ron» da el dinero que hay en ron.
+- **Resumen → valor del inventario**: la lista ya venía ordenada por valor;
+  ahora enseña la cifra (`modalProductos(..., { conValor: true })`, solo ahí).
+
+### Historial por empleado (oct 2026)
+
+Sección «Por empleado» arriba del Historial: los lotes del período sumados por
+persona, y al tocar a alguien, `modalFichaEmpleado` con **su historial completo**
+—no el período—, leído por el índice `porEmpleado`. La pregunta que contesta no
+es «qué pasó» sino «qué ha hecho esta persona», que es la que se hace cuando una
+barra no cuadra.
+
+- Se suma por **lote** y no por movimiento (`agruparLotes`, sacada de
+  `vistaHistorial` para usarla en los dos sitios): quien sacó seis licores de un
+  tiro es una operación, no seis.
+- La ficha es **de lectura**: no lleva «Revertir». Revertir repinta la pantalla
+  de atrás con `render()` y la ventana quedaría abierta enseñando algo que ya
+  cambió. El botón sigue en la lista de abajo.
+
+### El conteo con una botella en la mano (oct 2026)
+
+Escribir el nombre, dar intro, escribir el número, y repetir ciento treinta
+veces sin borrar el buscador entre una y otra:
+
+- Al **enfocar** el encasillado de un producto, el buscador se vacía solo. Eso
+  no esconde el renglón — al contrario, vuelven todos — así que el producto
+  sigue delante mientras se escribe el número.
+- **Intro en el buscador** baja al encasillado del primer producto visible.
+  Lleva `stopPropagation()`: `activarComportamientoDeCampos` escucha el Enter en
+  el documento y manda al «próximo campo», y como para entonces el filtro ya se
+  limpió, el próximo campo era el del **primer producto de la tabla**. Buscar
+  «barr» y dar intro aterrizaba en Jack Daniel's.
+- Antes de registrar, la confirmación abre con **«Faltan N productos por
+  contar»** y nombra los primeros cinco. Un conteo parcial es legítimo, pero
+  registrarlo como si fuera completo es la manera de que el almacén parezca
+  cuadrado sin estarlo.
+
 ### Borradores de lo que quedó a medias (sept 2026)
 
 Un conteo de ciento treinta botellas y el carrito de un empleado vivían solo en

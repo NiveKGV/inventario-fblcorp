@@ -245,7 +245,15 @@ esa entrada.
 
 ### Los dos costos, y por qué hay dos
 
-En Inventario cada producto tiene dos columnas de dinero, y no dicen lo mismo:
+**Dónde se ven:** toca el producto en Inventario. Arriba de su historia dice
+cuántas hay, **cuánto dinero tienes en ese producto**, y los dos costos por
+botella. No están como columnas en la tabla: con el iPad de pie, cincuenta y
+ocho renglones de precios repetidos sacaban de la pantalla lo que sí se usa
+todos los días. En la tabla queda **una sola línea arriba con el total del
+almacén a costo, y esa línea sigue al buscador**: escribes «ron» y te dice
+cuánto dinero tienes en ron.
+
+No dicen lo mismo:
 
 | | Qué es |
 |---|---|
@@ -323,6 +331,14 @@ Una vez por semana, para que el sistema no se despegue de la realidad:
 4. Escribe el motivo (conteo semanal, rotura, merma) y toca **Registrar el
    conteo**.
 
+**Si quedan productos sin contar, el sistema te lo dice antes de registrar.**
+La ventana de confirmación abre con «Faltan N productos por contar» y nombra
+los primeros. Puedes registrar igual —un conteo parcial es legítimo— pero
+queda dicho: esos se quedan con el número que tiene el sistema y no queda
+anotado que hoy se contaron. La línea de arriba de la tabla lleva la cuenta
+mientras trabajas: «12 contados · 3 con diferencia · 9 coinciden · faltan 46
+por contar».
+
 Donde hay diferencia, el inventario se iguala a lo contado. Donde coincide, no
 se mueve nada, pero **queda anotado que ese día se contó**. Todo queda en el
 Historial con tu nombre: el renglón del conteo dice cuántos productos se
@@ -339,7 +355,14 @@ todos los mezcales), sin importar las tildes. Lo que ya escribiste en un
 producto **no se pierde** al buscar otro: puedes buscar, contar, buscar el
 siguiente, y al final registrar todo junto.
 
-**La tecla intro cierra el teclado y no salta a ningún producto.** Pasa igual
+Con una botella en la mano el recorrido es: escribes el nombre, das **intro**
+—el cursor baja solo al encasillado de ese producto— y escribes el número.
+**El buscador se vacía solo** en cuanto entras al encasillado, así que para la
+próxima botella escribes directo, sin borrar lo anterior. El producto que
+estabas contando se queda delante.
+
+**Dentro del encasillado de la cantidad, la tecla intro cierra el teclado y no
+salta a ningún producto.** Pasa igual
 en Recibir mercancía, Devoluciones y Salida manual: se escribe la cantidad, se
 da intro, y el teclado se va sin escoger nada. Tú tocas el próximo encasillado.
 (Dentro del editor de un producto sí salta de un campo al siguiente, que para
@@ -487,6 +510,15 @@ Todo se puede exportar a Excel con **Exportar CSV**.
 y para qué restaurante. Tocando la fila se abre el desglose de lo que se llevó.
 El botón **Revertir** deshace la operación completa, no un producto suelto — por
 eso está en la fila y no en cada renglón.
+
+Arriba de esa lista está **Por empleado**: la misma información sumada por
+persona —cuántas operaciones hizo, cuántas botellas sacó y cuándo fue la
+última— para el período escogido. **Tocando a una persona sale su historial
+completo**, desde el primer día y sin importar el período de arriba: todas sus
+salidas, entradas, conteos y devoluciones, una por una, con lo que movió en
+cada una. Es la pantalla que se mira cuando una barra no cuadra. Desde ahí no
+se revierte nada; eso se hace en la lista de abajo, donde la operación se ve
+con su contexto.
 
 En **Resumen**, las tarjetas de arriba (agotados, hay que ordenar, bajo el máximo,
 lo que salió hoy, valor del inventario) **se tocan** y muestran exactamente

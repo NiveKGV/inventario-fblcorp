@@ -177,7 +177,7 @@ async function bandaRespaldo() {
 /* Abre el detrás de una tarjeta del resumen. Existe porque un número suelto
    ("3 agotados") obliga a irse a otra pestaña a averiguar cuáles son; el gerente
    está parado frente al almacén y necesita el nombre, no la cuenta. */
-function modalProductos(titulo, subtitulo, lista, { conOrden = false } = {}) {
+function modalProductos(titulo, subtitulo, lista, { conOrden = false, conValor = false } = {}) {
   const contenido = lista.length
     ? tabla(
       [
@@ -185,6 +185,10 @@ function modalProductos(titulo, subtitulo, lista, { conOrden = false } = {}) {
         { t: 'Quedan', num: true },
         { t: 'Máximo', num: true },
         ...(conOrden ? [{ t: 'Ordenar', num: true }] : []),
+        /* Solo donde el dinero es el asunto. En la lista de agotados esta
+           columna sería una fila de ceros, y en la de productos sin tope no
+           viene al caso. */
+        ...(conValor ? [{ t: 'Valor', num: true }] : []),
         'Estado',
       ],
       lista.map((p) => el('tr', {}, [
@@ -195,6 +199,7 @@ function modalProductos(titulo, subtitulo, lista, { conOrden = false } = {}) {
         el('td', { clase: 'num', texto: String(p.existencia) }),
         el('td', { clase: 'num', texto: String(p.par) }),
         ...(conOrden ? [el('td', { clase: 'num', texto: String(Math.max(0, p.par - p.existencia)) })] : []),
+        ...(conValor ? [el('td', { clase: 'num', texto: dinero(p.existencia * costoReal(p)) })] : []),
         el('td', {}, [etiquetaEstado(estadoStock(p))]),
       ])),
     )
@@ -301,6 +306,7 @@ async function vistaResumen() {
       dato(dinero(alertas.valorInventario), 'valor del inventario', '', () => modalProductos(
         'Valor del inventario', `${dinero(alertas.valorInventario)} a costo, de mayor a menor.`,
         [...productos].sort((a, b) => (b.existencia * costoReal(b)) - (a.existencia * costoReal(a))),
+        { conValor: true },
       )),
     ]),
     seccion('Acciones rápidas', null, el('div', { estilo: { display: 'flex', gap: '12px', flexWrap: 'wrap' } }, [
@@ -355,6 +361,12 @@ async function vistaInventario() {
   ]);
   const buscador = el('input', { type: 'search', placeholder: 'Buscar producto…', autocomplete: 'off' });
   const contenedor = el('div', { clase: 'tabla-envoltura' });
+  /* El dinero de lo que hay en el estante, y sigue al buscador: escribes «ron»
+     y dice cuánto tienes en ron. Es el número que uno quiere antes de hacer una
+     orden grande, y hasta ahora había que exportar para sacarlo. Va en una sola
+     línea sobre la tabla y no en una columna: la tabla ya se sale de la
+     pantalla con el iPad de pie. */
+  const resumenValor = el('p', { clase: 'desc', estilo: { margin: '0 0 10px' } });
 
   const pintar = () => {
     /* `normalizar` y no `toLowerCase`: en el almacén nadie escribe «Tía María»
@@ -365,10 +377,13 @@ async function vistaInventario() {
     const lista = productos.filter((p) => !q || normalizar(
       `${p.nombre} ${nombreDeCategoria(categorias, p.categoriaId)} ${p.tamano || ''}`,
     ).includes(q));
+    const valor = lista.reduce((s, p) => s + p.existencia * costoReal(p), 0);
+    resumenValor.textContent = lista.length
+      ? `${lista.length} ${lista.length === 1 ? 'producto' : 'productos'} · ${dinero(valor)} a costo`
+      : '';
     contenedor.replaceChildren(tabla(
       ['Producto', 'Categoría', { t: 'Existencia', num: true }, { t: 'Máximo', num: true },
-        { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true },
-        { t: 'Precio compra', num: true }, { t: 'Costo real', num: true }, 'Estado', ''],
+        { t: 'Mínimo', num: true }, { t: 'Consumo/sem', num: true }, 'Estado', ''],
       lista.map((p) => {
         const cat = categorias.find((c) => c.id === p.categoriaId);
         const cs = semanal.get(p.id) || 0;
@@ -388,15 +403,6 @@ async function vistaInventario() {
           el('td', { clase: 'num', texto: String(p.par) }),
           el('td', { clase: 'num', texto: String(p.puntoReorden) }),
           el('td', { clase: 'num', texto: cs ? cs.toFixed(1) : '—' }),
-          el('td', { clase: 'num', texto: p.costo ? dinero(p.costo) : '—' }),
-          /* Lo que de verdad costó lo que hay, que baja con las promociones.
-             Se marca cuando se separó del precio de compra: si no, parecen la
-             misma cifra repetida y nadie entiende para qué están las dos. */
-          el('td', {
-            clase: 'num',
-            texto: costoReal(p) ? dinero(costoReal(p)) : '—',
-            estilo: Math.abs(costoReal(p) - (p.costo || 0)) > 0.005 ? { color: 'var(--ok)' } : {},
-          }),
           el('td', {}, [etiquetaEstado(estadoStock(p))]),
           el('td', { clase: 'num' }, [
             el('button', { clase: 'btn btn-chico btn-fantasma', texto: 'Editar', onclick: () => modalProducto(p) }),
@@ -410,14 +416,14 @@ async function vistaInventario() {
 
   return el('div', {}, [
     seccion('Catálogo del almacén',
-      'Toca un producto para ver todo lo que le ha pasado: cuándo entró, cuándo salió, cuándo se contó y cuántas quedaban después de cada cosa. '
-      + 'El precio de compra es lo que cobra el proveedor y lo escribes tú; el costo real es lo que te costó por botella lo que hay en el estante, '
-      + 'y baja solo cuando entra mercancía de promoción. El valor del inventario y el consumo de cada barra se calculan con el costo real. '
+      'Toca un producto para ver todo lo que le ha pasado —cuándo entró, cuándo salió, cuándo se contó y cuántas quedaban después de cada cosa— '
+      + 'y cuánto dinero tienes en él: lo que cobra el proveedor por botella, lo que de verdad te costó y el total de lo que hay. '
       + 'El máximo es cuánto debe haber con el almacén completo; el mínimo es el número al que hay que pedir ya. La columna Consumo/sem es el promedio real de las últimas cuatro semanas: si el proveedor tarda una semana en entregar, el máximo debe cubrir al menos ese número más un colchón.',
       el('div', { clase: 'seccion-barra' }, [
         el('div', { clase: 'crece campo', estilo: { marginBottom: '0' } }, [conBorrar(buscador)]),
         el('button', { clase: 'btn btn-primario btn-chico', texto: 'Agregar producto', onclick: () => modalProducto(null) }),
       ]),
+      resumenValor,
       contenedor),
   ]);
 }
@@ -941,8 +947,14 @@ async function modalFichaProducto(p) {
 
   abrirModal({
     titulo: p.nombre,
-    subtitulo: `${p.tamano ? `${p.tamano} · ` : ''}Hay ${p.existencia} · Máximo ${p.par} · Mínimo ${p.puntoReorden}`
-      + ` · Precio de compra ${dinero(p.costo || 0)} · Costo real ${dinero(costoReal(p))}`,
+    /* El dinero vive acá y no en la tabla de Inventario: la pregunta «cuánto
+       valen las tres que hay» se hace mirando un producto, no barriendo una
+       columna de cincuenta y ocho. El total va pegado a la existencia, que es
+       de donde sale, y los dos costos por botella detrás, que es lo que lo
+       explica — y donde se ve el efecto de una promoción. */
+    subtitulo: `${p.tamano ? `${p.tamano} · ` : ''}Hay ${p.existencia} · `
+      + `${dinero(p.existencia * costoReal(p))} a costo · Máximo ${p.par} · Mínimo ${p.puntoReorden}`
+      + ` · Precio de compra ${dinero(p.costo || 0)} · Costo real ${dinero(costoReal(p))} por botella`,
     contenido: cuerpo,
     ancho: true,
     botones: [
@@ -1002,12 +1014,16 @@ async function vistaConteo() {
     return p && v !== p.existencia;
   }).length;
 
+  const sinContar = () => productos.filter((p) => !contados.has(p.id));
+
   const actualizar = () => {
     const n = contados.size;
     const dif = conDiferencia();
+    const faltan = sinContar().length;
     resumen.textContent = n
-      ? `${n} ${n === 1 ? 'contado' : 'contados'} · ${dif} con diferencia · ${n - dif} ${n - dif === 1 ? 'coincide' : 'coinciden'}.`
-      : 'Todavía no has contado ningún producto.';
+      ? `${n} ${n === 1 ? 'contado' : 'contados'} · ${dif} con diferencia · ${n - dif} ${n - dif === 1 ? 'coincide' : 'coinciden'}`
+        + ` · ${faltan ? `faltan ${faltan} por contar` : 'no falta ninguno'}.`
+      : `Todavía no has contado ningún producto. Hay ${productos.length} en el almacén.`;
   };
 
   /* Se guarda lo escrito según se escribe. No es la sesión: al volver hay que
@@ -1044,6 +1060,20 @@ async function vistaConteo() {
         actualizar();
         apuntarBorrador();
       },
+      /* Al entrar al encasillado de un producto, el buscador se vacía solo.
+         La escena es ésta: se escribe «barr», aparece Barrilito, se cuenta, y
+         para el próximo había que borrar «barr» letra por letra o ir a buscar
+         la X — ciento treinta veces. Vaciar aquí no esconde el renglón: al
+         contrario, vuelven todos, así que el producto sigue delante mientras
+         se escribe el número y el buscador queda limpio para el siguiente.
+         Se trae el renglón al centro porque la tabla acaba de crecer de uno a
+         ciento treinta y el que estaba mirando se le va de la vista. */
+      onfocus: () => {
+        if (!buscador.value) return;
+        buscador.value = '';
+        buscador.dispatchEvent(new Event('input', { bubbles: true }));
+        entrada.closest('tr')?.scrollIntoView({ block: 'center' });
+      },
     });
     entradas.set(p.id, entrada);
     const celdaDif = el('td', { clase: 'num', texto: '—', estilo: { color: 'var(--texto-3)' } });
@@ -1079,6 +1109,23 @@ async function vistaConteo() {
       if (!tr.hidden) visibles += 1;
     }
     sinResultados.hidden = visibles > 0;
+  };
+  /* Intro en el buscador baja al encasillado del primer producto que quedó a
+     la vista, y al caer ahí el buscador se vacía solo (ver arriba). Así el
+     recorrido completo de una botella es: nombre, intro, número. El intro
+     DENTRO del encasillado sigue sin hacer nada, que es como lo pidió.
+
+     `stopPropagation` no es de adorno: `activarComportamientoDeCampos` escucha
+     el Enter en el documento y manda al «próximo campo». Como este manejador
+     corre antes y vacía el buscador, para cuando llegaba el de arriba todos los
+     renglones estaban visibles otra vez y el próximo campo era el del PRIMER
+     producto de la tabla, no el que se buscó. Medido: buscar «barr» y dar
+     intro aterrizaba en Jack Daniel's. */
+  buscador.onkeydown = (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    filas.find((tr) => !tr.hidden)?.querySelector('input')?.focus();
   };
 
   /* Retomar no aplica nada solo: si entró otra persona, o si el conteo de la
@@ -1155,9 +1202,22 @@ async function vistaConteo() {
             if (!lineas.length) { brindis({ texto: 'No has contado ningún producto', tipo: 'error' }); return; }
             const dif = conDiferencia();
             const iguales = lineas.length - dif;
+            /* Lo que falta se dice ANTES de lo que se hizo, y en el título.
+               Un conteo a medias registrado como si fuera completo es la
+               manera de que el almacén parezca cuadrado sin estarlo: los que
+               quedaron en blanco se quedan con el número viejo y nadie
+               recuerda, tres días después, cuáles fueron. */
+            const faltan = sinContar();
+            const nombres = faltan.slice(0, 5).map((p) => p.nombre).join(', ')
+              + (faltan.length > 5 ? ` y ${faltan.length - 5} más` : '');
             if (!await confirmar({
-              titulo: 'Registrar conteo físico',
-              mensaje: `Contaste ${lineas.length} ${lineas.length === 1 ? 'producto' : 'productos'}. `
+              titulo: faltan.length
+                ? `Faltan ${faltan.length} ${faltan.length === 1 ? 'producto' : 'productos'} por contar`
+                : 'Registrar conteo físico',
+              mensaje: (faltan.length
+                ? `Sin contar: ${nombres}. Esos se quedan con el número que tiene el sistema y no queda anotado que hoy se contaron. `
+                : 'Contaste el almacén completo. ')
+                + `Contaste ${lineas.length} ${lineas.length === 1 ? 'producto' : 'productos'}. `
                 + (dif ? `${dif} ${dif === 1 ? 'tiene' : 'tienen'} diferencia y el inventario se iguala a lo contado. ` : '')
                 + (iguales ? `${iguales} ${iguales === 1 ? 'coincide' : 'coinciden'} con el sistema y ${iguales === 1 ? 'queda anotado' : 'quedan anotados'} como contados. ` : '')
                 + 'Todo queda en el historial a tu nombre.',
@@ -1613,35 +1673,40 @@ function exportarMovimientos(movs, nombreRest) {
 async function vistaHistorial() {
   if (!rangoReporte) rangoReporte = rangoPreset('7');
   const [desde, hasta] = rangoReporte;
-  const [movs, restaurantes, restauraciones] = await Promise.all([
+  const [movs, restaurantes, restauraciones, empleados] = await Promise.all([
     movimientosPeriodo(desde, hasta), DB.todos('restaurantes'),
-    DB.leerConfig('restauraciones', []),
+    DB.leerConfig('restauraciones', []), DB.todos('empleados'),
   ]);
   const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
 
-  /* Los movimientos vienen ya ordenados de más nuevo a más viejo, y Map
-     conserva el orden de inserción: agrupar no altera el orden de la lista. */
-  const lotes = new Map();
-  for (const m of movs) {
-    let g = lotes.get(m.loteId);
-    if (!g) {
-      g = {
-        loteId: m.loteId,
-        fechaISO: m.fechaISO,
-        tipo: m.tipo,
-        empleadoNombre: m.empleadoNombre,
-        restauranteId: m.restauranteId,
-        motivo: m.motivo,
-        autorizadoPor: m.autorizadoPor,
-        origen: m.origen,
-        localElegido: m.localElegido,
-        lineas: [],
-      };
-      lotes.set(m.loteId, g);
+  const grupos = agruparLotes(movs);
+
+  /* El mismo registro, sumado por persona. La lista de abajo contesta «qué
+     pasó»; ésta contesta «qué ha hecho esta persona», que es la pregunta que
+     se hace cuando una barra no cuadra. Se saca de los lotes y no de los
+     movimientos para que quien sacó seis licores de un tiro cuente como una
+     operación y no como seis. */
+  const gente = new Map();
+  for (const g of grupos) {
+    if (!g.empleadoId) continue;
+    let p = gente.get(g.empleadoId);
+    if (!p) {
+      p = { id: g.empleadoId, nombre: g.empleadoNombre, operaciones: 0, saco: 0, porTipo: new Map(), ultima: g.fechaISO };
+      gente.set(g.empleadoId, p);
     }
-    g.lineas.push(m);
+    p.operaciones += 1;
+    p.porTipo.set(g.tipo, (p.porTipo.get(g.tipo) || 0) + 1);
+    if (g.tipo === 'salida') p.saco += g.lineas.reduce((s, m) => s + -m.delta, 0);
+    if (g.fechaISO > p.ultima) p.ultima = g.fechaISO;
   }
-  const grupos = [...lotes.values()];
+  const personas = [...gente.values()].sort((a, b) => b.operaciones - a.operaciones);
+  const dondeTrabaja = (id) => {
+    const e = empleados.find((x) => x.id === id);
+    if (!e) return 'ya no está registrado';
+    if (e.rol === 'gerente') return 'Gerencia';
+    const nombres = localesDe(e).map((r) => nombreRest(r)).filter((n) => n !== '—');
+    return nombres.length ? nombres.join(' y ') : '—';
+  };
 
   return el('div', {}, [
     /* Va arriba del historial y no escondido en Sistema: quien viene a leer
@@ -1664,6 +1729,31 @@ async function vistaHistorial() {
       ]),
     ]) : null,
 
+    seccion('Por empleado',
+      'Quién movió qué en el período escogido abajo. Toca a una persona para ver su historial completo, '
+      + 'desde el primer día y sin importar el período: todas sus salidas, entradas, conteos y devoluciones, una por una.',
+      personas.length
+        ? tabla(['Empleado', 'Dónde', { t: 'Operaciones', num: true }, { t: 'Botellas que sacó', num: true }, 'Última actividad'],
+          personas.map((p) => el('tr', {
+            clase: 'fila-tocable',
+            onclick: () => modalFichaEmpleado(p.id, p.nombre),
+          }, [
+            el('td', {}, [
+              el('div', { texto: p.nombre }),
+              el('div', {
+                clase: 'desc',
+                estilo: { margin: '0' },
+                texto: [...p.porTipo.entries()]
+                  .map(([t, n]) => `${n} ${(TIPOS[t]?.etiqueta || t).toLowerCase()}`).join(' · '),
+              }),
+            ]),
+            el('td', { texto: dondeTrabaja(p.id) }),
+            el('td', { clase: 'num', texto: numero(p.operaciones) }),
+            el('td', { clase: 'num', texto: p.saco ? numero(p.saco) : '—' }),
+            el('td', { texto: fechaHoraPR(p.ultima) }),
+          ])))
+        : el('p', { clase: 'vacio', texto: 'Nadie movió nada en este período.' })),
+
     seccion('Historial de movimientos',
       'Cada fila es una operación completa: quién, cuándo y para qué restaurante. Tócala para ver qué se llevó. '
       + 'Registro sin borrar: una corrección no elimina nada, suma una reversión que también queda aquí.',
@@ -1685,6 +1775,33 @@ async function vistaHistorial() {
           grupos.slice(0, 300).flatMap((g) => filaLote(g, nombreRest)))
         : el('p', { clase: 'vacio', texto: 'No hay movimientos en este período.' })),
   ].filter(Boolean));
+}
+
+/* Los movimientos vienen ordenados de más nuevo a más viejo, y Map conserva el
+   orden de inserción: agrupar no altera el orden de la lista. */
+function agruparLotes(movs) {
+  const lotes = new Map();
+  for (const m of movs) {
+    let g = lotes.get(m.loteId);
+    if (!g) {
+      g = {
+        loteId: m.loteId,
+        fechaISO: m.fechaISO,
+        tipo: m.tipo,
+        empleadoId: m.empleadoId,
+        empleadoNombre: m.empleadoNombre,
+        restauranteId: m.restauranteId,
+        motivo: m.motivo,
+        autorizadoPor: m.autorizadoPor,
+        origen: m.origen,
+        localElegido: m.localElegido,
+        lineas: [],
+      };
+      lotes.set(m.loteId, g);
+    }
+    g.lineas.push(m);
+  }
+  return [...lotes.values()];
 }
 
 /* Una operación = una fila, no una fila por botella.
@@ -1781,6 +1898,103 @@ function filaLote(g, nombreRest) {
   ]);
 
   return [fila, detalle];
+}
+
+/* La historia completa de una persona, de lo más nuevo a lo más viejo y sin
+   cortar por período: eso es lo que uno quiere cuando una barra no cuadra y
+   hay que ver qué ha hecho alguien desde el principio. Sale del índice
+   `porEmpleado`, así que no hace falta leer el historial entero para armarla.
+
+   Es de lectura, a propósito: desde aquí no se revierte nada. Revertir repinta
+   la pantalla de atrás y esta ventana quedaría abierta enseñando algo que ya
+   cambió. El botón está en el historial de abajo, donde la operación se ve en
+   su contexto. */
+async function modalFichaEmpleado(empleadoId, nombre) {
+  const [movs, revertidos, restaurantes] = await Promise.all([
+    DB.porIndice('movimientos', 'porEmpleado', empleadoId), lotesRevertidos(), DB.todos('restaurantes'),
+  ]);
+  const nombreRest = (id) => restaurantes.find((r) => r.id === id)?.nombre || '—';
+  movs.sort((a, b) => (a.fechaISO < b.fechaISO ? 1 : -1));
+  const grupos = agruparLotes(movs);
+  const saco = movs.reduce((s, m) => s + (m.tipo === 'salida' ? -m.delta : 0), 0);
+  const metio = movs.reduce((s, m) => s + (m.tipo === 'entrada' ? m.delta : 0), 0);
+
+  /* Un conteo no se mide en botellas —puede no tener una sola diferencia— así
+     que se dice en contados. Lo demás sí: cuántas botellas y cuáles. */
+  const queMovio = (g) => {
+    if (g.tipo === 'ajuste') {
+      const conDif = g.lineas.filter((m) => m.delta !== 0).length;
+      return [
+        `${g.lineas.length} ${g.lineas.length === 1 ? 'contado' : 'contados'}`,
+        conDif ? `${conDif} con diferencia` : 'todos coincidían',
+      ];
+    }
+    const botellas = g.lineas.reduce((s, m) => s + Math.abs(m.delta), 0);
+    return [
+      `${botellas} ${botellas === 1 ? 'botella' : 'botellas'}`,
+      g.lineas.slice(0, 4).map((m) => `${m.productoNombre} ${Math.abs(m.delta)}`).join(', ')
+        + (g.lineas.length > 4 ? ` y ${g.lineas.length - 4} más` : ''),
+    ];
+  };
+
+  const LIMITE = 40;
+  const cuerpo = el('div');
+  const pintar = (todos) => {
+    const lista = todos ? grupos : grupos.slice(0, LIMITE);
+    cuerpo.replaceChildren(...[
+      grupos.length
+        ? tabla(['Fecha y hora', 'Tipo', 'Restaurante', 'Qué movió', 'Motivo'],
+          lista.map((g) => {
+            const [titulo, detalle] = queMovio(g);
+            return el('tr', { estilo: revertidos.has(g.loteId) ? { opacity: '.5' } : {} }, [
+              el('td', { texto: fechaHoraPR(g.fechaISO) }),
+              el('td', {}, [el('span', {
+                clase: `etiqueta ${g.tipo === 'salida' ? 'critico' : (g.tipo === 'reversion' ? 'agotado' : 'ok')}`,
+                texto: TIPOS[g.tipo]?.etiqueta || g.tipo,
+              })]),
+              el('td', { texto: g.restauranteId ? nombreRest(g.restauranteId) : '—' }),
+              el('td', {}, [
+                el('div', { texto: titulo }),
+                detalle ? el('div', { clase: 'desc', estilo: { margin: '0' }, texto: detalle }) : null,
+              ].filter(Boolean)),
+              el('td', {
+                texto: [
+                  g.motivo,
+                  g.autorizadoPor ? `Autorizó ${g.autorizadoPor}` : '',
+                  revertidos.has(g.loteId) ? 'Revertida después' : '',
+                ].filter(Boolean).join(' · ') || '—',
+              }),
+            ]);
+          }))
+        : el('p', { clase: 'vacio', texto: 'Esta persona todavía no ha movido nada.' }),
+      !todos && grupos.length > LIMITE
+        ? el('button', {
+          clase: 'btn btn-chico btn-fantasma',
+          texto: `Ver las ${grupos.length} operaciones`,
+          estilo: { marginTop: '12px' },
+          onclick: () => pintar(true),
+        })
+        : null,
+    ].filter(Boolean));
+  };
+  pintar(false);
+
+  abrirModal({
+    titulo: nombre,
+    subtitulo: grupos.length
+      ? [
+        `${grupos.length} ${grupos.length === 1 ? 'operación' : 'operaciones'}`
+          + ` desde ${fechaHoraPR(grupos[grupos.length - 1].fechaISO)}`,
+        /* Un gerente no saca nada y un empleado no recibe nada: enseñar
+           «sacó 0» a cada uno es ruido en la línea que más se lee. */
+        saco ? `sacó ${numero(saco)} ${saco === 1 ? 'botella' : 'botellas'}` : '',
+        metio ? `recibió ${numero(metio)}` : '',
+      ].filter(Boolean).join(' · ')
+      : 'Sin movimientos registrados',
+    contenido: cuerpo,
+    ancho: true,
+    botones: [{ texto: 'Cerrar', accion: cerrarModal }],
+  });
 }
 
 async function revertir(g) {
