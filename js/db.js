@@ -51,6 +51,17 @@ function abrir() {
     req.onsuccess = () => {
       _db = req.result;
       _db.onversionchange = () => { _db.close(); _db = null; };
+      /* iOS cierra esta conexión por su cuenta: la app pasa un rato en segundo
+         plano, el iPad anda corto de memoria, o el sistema recicla el proceso
+         del navegador. No avisa antes, avisa aquí.
+
+         Sin soltar la referencia, la app se queda agarrada a una conexión
+         muerta y TODAS las operaciones fallan con «The database connection is
+         closing», una tras otra, hasta que alguien cierra la app y la vuelve a
+         abrir. En el almacén eso se veía así: se entra el código, no deja
+         entrar, y hay que matar la app. Soltándola, la próxima operación abre
+         una conexión nueva sola. */
+      _db.onclose = () => { _db = null; };
       resolve(_db);
     };
     req.onerror = () => reject(req.error);
@@ -58,7 +69,24 @@ function abrir() {
   });
 }
 
-function tx(stores, modo, fn) {
+/* El aviso `onclose` no siempre llega a tiempo: la primera operación después de
+   que iOS cierre la conexión puede salir ya rota. Por eso, además de escuchar
+   el aviso, se reintenta UNA vez con una conexión nueva.
+
+   Repetir `fn` es seguro. El fallo ocurre al crear la transacción, o sea antes
+   de escribir nada; y si algo fallara a medias, IndexedDB cancela la
+   transacción entera, así que no queda media operación guardada. Nunca se
+   duplica una salida ni se escribe un movimiento dos veces.
+
+   Un solo reintento, nunca en ciclo: si la conexión nueva también falla, el
+   error sube y la pantalla lo dice. */
+function conexionMuerta(e) {
+  if (!e) return false;
+  return e.name === 'InvalidStateError'
+    || /connection is closing|database connection/i.test(e.message || '');
+}
+
+function tx(stores, modo, fn, reintentar = true) {
   return abrir().then((db) => new Promise((resolve, reject) => {
     const t = db.transaction(stores, modo);
     let resultado;
@@ -71,7 +99,12 @@ function tx(stores, modo, fn) {
       try { t.abort(); } catch (_) { /* ya abortada */ }
       reject(e);
     });
-  }));
+  })).catch((e) => {
+    if (!reintentar || !conexionMuerta(e)) throw e;
+    if (_db) { try { _db.close(); } catch (_) { /* ya cerrada */ } }
+    _db = null;
+    return tx(stores, modo, fn, false);
+  });
 }
 
 function pedir(req) {

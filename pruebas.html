@@ -580,6 +580,41 @@ await lanza(
 );
 
 /* ------------------------------------------------------------------ */
+seccion('La conexión con la base se recupera sola');
+
+/* iOS cierra la conexión con IndexedDB por su cuenta: la app pasa un rato en
+   segundo plano, el iPad anda corto de memoria, o el sistema recicla el
+   proceso del navegador. Si la app se queda agarrada a esa conexión muerta,
+   TODO falla con «The database connection is closing» hasta que alguien cierra
+   la app. Pasó en el almacén: se entraba el código y no dejaba entrar. */
+const conexionViva = await DB.abrir();
+conexionViva.close();
+
+const leyoDespues = await DB.todos('productos');
+igual(Array.isArray(leyoDespues), true, 'Con la conexión cerrada por debajo, una lectura vuelve a funcionar sola');
+
+await DB.escribirConfig('prueba_reconexion', 'escrito');
+igual(await DB.leerConfig('prueba_reconexion'), 'escrito', 'Y una escritura también: no hay que cerrar la app');
+
+/* Que el reintento no duplique: una entrada registrada con la conexión muerta
+   tiene que dejar UN movimiento, no dos. */
+const paraReintento = (await DB.todos('productos'))[0];
+const movsAntes = (await DB.todos('movimientos')).length;
+const existenciaAntes = paraReintento.existencia;
+(await DB.abrir()).close();
+await M.registrarLote({
+  tipo: 'entrada',
+  lineas: [{ productoId: paraReintento.id, cantidad: 2 }],
+  empleadoId: 'g1',
+  empleadoNombre: 'Gerente',
+  motivo: 'Prueba de reconexión',
+});
+const movsDespues = (await DB.todos('movimientos')).length;
+igual(movsDespues - movsAntes, 1, 'El reintento no duplica el movimiento');
+igual((await DB.obtener('productos', paraReintento.id)).existencia, existenciaAntes + 2,
+  'Ni suma la cantidad dos veces');
+
+/* ------------------------------------------------------------------ */
 seccion('Códigos de acceso');
 
 const C = await import('./js/cripto.js');

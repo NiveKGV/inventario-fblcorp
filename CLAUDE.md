@@ -383,6 +383,31 @@ días. El dinero quedó donde se pregunta:
 - **Resumen → valor del inventario**: la lista ya venía ordenada por valor;
   ahora enseña la cifra (`modalProductos(..., { conValor: true })`, solo ahí).
 
+### La conexión con IndexedDB se recupera sola (oct 2026)
+
+En el iPad salía, de vez en cuando, que el código no dejaba entrar; cerrar la
+app y volver a abrirla lo arreglaba. Causa: **iOS cierra la conexión con
+IndexedDB por su cuenta** —app un rato en segundo plano, memoria corta, el
+sistema reciclando el proceso del navegador— y `abrir()` guardaba `_db` para
+siempre. Con la conexión muerta, toda operación falla con `InvalidStateError:
+The database connection is closing`, una tras otra, hasta recargar la página.
+Reproducido cerrando la conexión a mano: el acceso enseñaba ese texto en inglés
+e iba a fallar en cada intento.
+
+Dos piezas, las dos necesarias:
+
+- `_db.onclose = () => { _db = null; }` — el aviso que faltaba, al lado del
+  `onversionchange` que ya estaba.
+- `tx()` reintenta **una** vez con conexión nueva si el error es de conexión
+  muerta. El aviso no siempre llega antes de la primera operación rota.
+
+Repetir `fn` es seguro: el fallo ocurre al crear la transacción, antes de
+escribir, y una transacción que falle a medias se cancela entera. Hay prueba de
+que el reintento **no duplica** el movimiento ni la cantidad.
+
+Esto afectaba a todo, no solo al acceso: con la sesión abierta habría salido
+«No se registró» al guardar una salida o un conteo.
+
 ### Historial por empleado (oct 2026)
 
 Sección «Por empleado» arriba del Historial: los lotes del período sumados por
